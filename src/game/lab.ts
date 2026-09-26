@@ -6,6 +6,7 @@ import {
   flameTest,
   getSubstance,
   pH,
+  prettyFormula,
   react,
   readBalance,
   readPHMeter,
@@ -48,6 +49,8 @@ export class Stock {
 export class Vessel {
   readonly contents = new Mixture();
   lastPourAt = -Infinity;
+  /** Lab clock time of the last reaction or gas release (for bubbles). */
+  lastReactionAt: number | undefined;
   constructor(public def: VesselDef) {}
   get id() {
     return this.def.id;
@@ -84,6 +87,11 @@ export class Lab {
       this.stocks.set(s.id, new Stock(s.id, s.label, Mixture.of(s.amountsMol)));
       for (const id of Object.keys(s.amountsMol)) host.journal.recordSubstance(id, `bottle label: ${s.label}`);
     }
+  }
+
+  /** Seconds of simulated lab time. */
+  get clock(): number {
+    return this.time;
   }
 
   // ---------- lookup ----------
@@ -265,7 +273,7 @@ export class Lab {
       return;
     }
     const waterMol = mix.moles('H2O');
-    const leftover = mix.ids().filter((id) => id !== 'H2O' && mix.moles(id) > 1e-4);
+    const leftover = mix.ids().filter((id) => id !== 'H2O' && mix.moles(id) > 0.02);
     this.chamber.vent();
     if (waterMol <= 1e-6) {
       this.host.log('The spark crackles, but nothing burns.', 'warn');
@@ -276,7 +284,7 @@ export class Lab {
     this.host.log(`Recombiner: +${mL.toFixed(1)} mL of water to the reserve.`, 'good');
     if (leftover.length) {
       this.host.log(
-        `Unburnt ${leftover.map((id) => getSubstance(id).formula).join(', ')} was purged and lost.`,
+        `Unburnt ${leftover.map((id) => prettyFormula(getSubstance(id).formula)).join(', ')} was purged and lost.`,
         'warn',
       );
     }
@@ -332,10 +340,11 @@ export class Lab {
 
     const gases = mix.removeGases();
     if (Object.keys(gases).length) this.routeGases(v, gases);
+    if (events.length || Object.keys(gases).length) v.lastReactionAt = this.time;
 
     for (const ev of events) {
       this.host.journal.recordReaction(ev);
-      this.logOnce(`rx-${ev.reaction.id}-${v.id}`, `${this.shortName(v)}: ${ev.reaction.observation}`, 'info', 5);
+      this.logOnce(`rx-${ev.reaction.id}-${v.id}`, `${v.def.name}: ${ev.reaction.observation}`, 'info', 5);
       if (ev.temperatureAfterK - ev.temperatureBeforeK > 25) {
         this.logOnce(`hot-${v.id}`, `The ${v.def.name.toLowerCase()} got hot fast!`, 'warn', 5);
       }
@@ -392,10 +401,6 @@ export class Lab {
         this.host.journal.recordTest(m.id, 'water', `${dissolves} in water.`);
       }
     }
-  }
-
-  private shortName(v: Vessel): string {
-    return v.def.name.split(' ')[0];
   }
 
   private logOnce(key: string, text: string, tone: Tone = 'info', everyS = 3): void {

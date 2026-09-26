@@ -89,7 +89,7 @@ export class GameState {
   harvest(mineral: MineralDef): void {
     const ready = this.depositCooldown.get(mineral.id) ?? 0;
     if (this.time < ready) return;
-    this.depositCooldown.set(mineral.id, this.time + 1);
+    this.depositCooldown.set(mineral.id, this.time + 0.4);
     const stock = this.lab.mineralStock(mineral);
     stock.contents.add(mineral.substanceId, mineral.gramsPerHarvest / getSubstance(mineral.substanceId).molarMass);
     stock.contents.settle(false);

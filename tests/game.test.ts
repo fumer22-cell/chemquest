@@ -134,7 +134,7 @@ describe('recombiner', () => {
     fill(g, 'h2', 1.5);
     fill(g, 'o2', 3.0);
     g.lab.ignite();
-    expect(g.log.some((l) => /Unburnt O2 was purged/.test(l.text))).toBe(true);
+    expect(g.log.some((l) => /Unburnt O₂ was purged/.test(l.text))).toBe(true);
   });
 
   it('igniting above the limit wrecks the chamber', () => {

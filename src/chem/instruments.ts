@@ -28,7 +28,7 @@ export const GRADUATION: Record<Glassware, number> = {
   cylinder: 0.5, // 100 mL graduated cylinder: read to ±0.5 mL
   beaker: 25, // beaker marks are rough
   tube: 5,
-  flask: 50,
+  flask: 10,
 };
 
 export function readVolume(volumeML: number, kind: Glassware): string {

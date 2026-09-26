@@ -38,7 +38,7 @@ export const VESSELS: VesselDef[] = [
   { id: 'beaker', name: 'Beaker 600 mL', kind: 'beaker', capacityML: 600, glassMassG: 182.4, heatCapacity: 150 },
   { id: 'cylinder', name: 'Graduated cylinder 100 mL', kind: 'cylinder', capacityML: 100, glassMassG: 96.7, heatCapacity: 80 },
   { id: 'tube', name: 'Test tube', kind: 'tube', capacityML: 25, glassMassG: 17.9, heatCapacity: 15 },
-  { id: 'flask', name: 'Reaction flask → O₂ tank', kind: 'flask', capacityML: 250, glassMassG: 121.3, heatCapacity: 60, gasOutlet: 'o2' },
+  { id: 'flask', name: 'Reaction flask', kind: 'flask', capacityML: 250, glassMassG: 121.3, heatCapacity: 60, gasOutlet: 'o2' },
 ];
 
 export const TANKS = {
