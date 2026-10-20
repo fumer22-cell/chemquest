@@ -1,103 +1,156 @@
 /**
- * Substance definitions. Add new substances here; no game logic needs to change.
+ * Substance data. Every number here is meant to be checked and edited.
  *
- * Molar masses are NOT stored: they are computed from `formula` using elements.json.
- * Values are approximate 25 °C textbook data.
+ * Units:
+ *   mw          g/mol (a unit test checks it against the formula)
+ *   density     g/mL of the pure substance at ~25 °C
+ *   mp, bp      °C (bp: null = decomposes / not volatile in the game)
+ *   cp          J/(g·K) specific heat
+ *   latent      J/g heat of vaporisation (volatile liquids only)
+ *   solubility  g of solute per 100 g of solvent, as [°C, g/100 g] points;
+ *               linear interpolation between points, clamped at the ends.
+ *   color       RGB of the pure substance; `alpha` is how strongly it tints a
+ *               liquid it is dissolved/mixed in (0 = colourless).
+ *
+ * Values marked "est." are reasonable estimates where good literature data are
+ * scarce; they are tuned so the standard procedure behaves like the real lab.
  */
-export type PureState = 'solid' | 'liquid' | 'gas';
 
-export interface SubstanceDef {
-  /** Unique key used everywhere else (reactions, minerals, orders). */
+export type Phase = 'solid' | 'liquid';
+
+export interface Substance {
   id: string;
   name: string;
-  /** Chemical formula, parsed for composition and molar mass. Parentheses allowed. */
   formula: string;
-  /** State of the pure substance at room temperature. */
-  state: PureState;
-  /** Density of the pure solid/liquid in g/mL. */
-  density?: number;
-  /** Solubility in g per 100 g water at 25 °C. Omitted = insoluble. */
-  solubility?: number;
-  /** Molar heat capacity, J/(mol·K). */
+  smiles: string;
+  mw: number;
+  density: number;
+  mp: number;
+  bp: number | null;
+  phase: Phase;
   cp: number;
-  /** Enthalpy of solution, kJ/mol (negative = releases heat on dissolving). */
-  heatOfSolution?: number;
-  /** Strong acid: H+ released per formula unit when dissolved. */
-  acidProtons?: number;
-  /** Strong base: OH- released per formula unit when dissolved. */
-  baseHydroxides?: number;
-  /** Render colour for the undissolved solid / pure liquid / gas. */
-  color: number;
-  /** Colour it gives a solution (omit for colourless). */
-  solutionColor?: number;
-  /** What the player sees. */
-  appearance: string;
+  latent?: number;
+  color: [number, number, number];
+  alpha: number;
+  /** Solubility of this substance in each solvent (keys are solvent ids). */
+  solubility?: Record<string, [number, number][]>;
+  /** Shown in the lab notebook / tooltips. */
+  hazard?: string;
 }
 
-export const SUBSTANCES: SubstanceDef[] = [
+export const SUBSTANCES: Substance[] = [
+  // ---------- solvents & simple liquids ----------
   {
-    id: 'H2O', name: 'water', formula: 'H2O', state: 'liquid',
-    density: 1.0, cp: 75.3, color: 0x7fc4ff, appearance: 'clear, colourless liquid',
+    id: 'water', name: 'water', formula: 'H2O', smiles: 'O', mw: 18.015,
+    density: 1.0, mp: 0, bp: 100, phase: 'liquid', cp: 4.18, latent: 2257,
+    color: [90, 160, 255], alpha: 0.35,
   },
   {
-    id: 'HCl', name: 'hydrogen chloride', formula: 'HCl', state: 'gas',
-    solubility: 72, cp: 29.1, heatOfSolution: -74.8, acidProtons: 1,
-    color: 0xe8f4ff, appearance: 'colourless, sharp-smelling gas; fumes in air (hydrochloric acid when dissolved)',
+    id: 'ethanol', name: 'ethanol', formula: 'C2H6O', smiles: 'CCO', mw: 46.07,
+    density: 0.789, mp: -114, bp: 78.4, phase: 'liquid', cp: 2.44, latent: 841,
+    color: [200, 225, 255], alpha: 0.2,
+    hazard: 'Flammable. Keep away from open flames; heat on a hot plate or bath only.',
   },
   {
-    id: 'NaOH', name: 'sodium hydroxide', formula: 'NaOH', state: 'solid',
-    density: 2.13, solubility: 111, cp: 59.5, heatOfSolution: -44.5, baseHydroxides: 1,
-    color: 0xf5f5f0, appearance: 'white waxy pellets; slippery and caustic',
+    id: 'acetic_anhydride', name: 'acetic anhydride', formula: 'C4H6O3', smiles: 'CC(=O)OC(C)=O', mw: 102.09,
+    density: 1.082, mp: -73, bp: 139.8, phase: 'liquid', cp: 1.8, latent: 406,
+    color: [215, 228, 240], alpha: 0.25,
+    hazard: 'Corrosive, lachrymator (makes eyes water), reacts with water. Dispense in the fume hood.',
   },
   {
-    id: 'NaCl', name: 'sodium chloride', formula: 'NaCl', state: 'solid',
-    density: 2.16, solubility: 36, cp: 50.5, heatOfSolution: 3.9,
-    color: 0xf0f0ff, appearance: 'clear to white cubic crystals',
+    id: 'acetic_acid', name: 'acetic acid', formula: 'C2H4O2', smiles: 'CC(=O)O', mw: 60.052,
+    density: 1.049, mp: 16.6, bp: 118, phase: 'liquid', cp: 2.05, latent: 395,
+    color: [220, 230, 240], alpha: 0.2,
+    hazard: 'Corrosive vapours (vinegar smell).',
   },
   {
-    id: 'KClO3', name: 'potassium chlorate', formula: 'KClO3', state: 'solid',
-    density: 2.32, solubility: 7.3, cp: 100.3, heatOfSolution: 41.4,
-    color: 0xffffff, appearance: 'white crystalline powder; strong oxidiser',
+    // Treated as the pure acid; the stock bottle is 85 % w/w H3PO4 in water.
+    id: 'phosphoric_acid', name: 'phosphoric acid', formula: 'H3PO4', smiles: 'OP(=O)(O)O', mw: 97.994,
+    density: 1.88, mp: 42, bp: null, phase: 'liquid', cp: 1.06,
+    color: [235, 240, 230], alpha: 0.15,
+    hazard: 'Corrosive. Wear gloves and goggles.',
   },
   {
-    id: 'KCl', name: 'potassium chloride', formula: 'KCl', state: 'solid',
-    density: 1.98, solubility: 34, cp: 51.3, heatOfSolution: 17.2,
-    color: 0xeeeeee, appearance: 'white crystalline solid',
+    // Ferric chloride test reagent (used as a ~1 % aqueous solution).
+    id: 'ferric_chloride', name: 'iron(III) chloride', formula: 'FeCl3', smiles: 'Cl[Fe](Cl)Cl', mw: 162.2,
+    density: 2.9, mp: 306, bp: null, phase: 'solid', cp: 0.7,
+    color: [230, 150, 40], alpha: 2.5,
+    solubility: { water: [[0, 74], [20, 92], [100, 535]] },
+    hazard: 'Corrosive; stains skin and clothing.',
+  },
+
+  // ---------- aspirin synthesis ----------
+  {
+    id: 'salicylic_acid', name: 'salicylic acid', formula: 'C7H6O3', smiles: 'OC(=O)c1ccccc1O', mw: 138.12,
+    density: 1.443, mp: 159, bp: null, phase: 'solid', cp: 1.16,
+    color: [238, 236, 228], alpha: 0,
+    solubility: {
+      water: [[0, 0.12], [20, 0.22], [40, 0.42], [60, 0.95], [80, 2.2], [100, 6.7]],
+      ethanol: [[0, 30], [25, 47], [60, 80]],
+      acetic_anhydride: [[20, 12], [50, 30], [75, 60], [100, 90]], // est.
+      acetic_acid: [[20, 9], [60, 30], [100, 70]], // est.
+    },
+    hazard: 'Irritant to eyes and skin.',
   },
   {
-    id: 'MnO2', name: 'manganese dioxide', formula: 'MnO2', state: 'solid',
-    density: 5.03, cp: 54.1,
-    color: 0x22201e, appearance: 'dense black, sooty solid',
+    id: 'aspirin', name: 'acetylsalicylic acid (aspirin)', formula: 'C9H8O4', smiles: 'CC(=O)Oc1ccccc1C(=O)O', mw: 180.16,
+    density: 1.4, mp: 136, bp: null, phase: 'solid', cp: 1.2,
+    color: [250, 250, 252], alpha: 0,
+    solubility: {
+      water: [[0, 0.12], [25, 0.33], [37, 1.0], [60, 1.9], [80, 3.0], [100, 4.5]], // est. above 37 °C
+      ethanol: [[0, 15], [25, 25], [60, 60]],
+      acetic_anhydride: [[20, 8], [75, 40], [100, 60]], // est.
+      acetic_acid: [[20, 5], [75, 35], [100, 55]], // est.
+    },
   },
   {
-    id: 'CaCO3', name: 'calcium carbonate', formula: 'CaCO3', state: 'solid',
-    density: 2.71, cp: 83.5,
-    color: 0xe9e4d4, appearance: 'white, chalky solid',
+    // Main side product of overheating: aspirin acylating unreacted salicylic acid.
+    id: 'assa', name: 'acetylsalicylsalicylic acid', formula: 'C16H12O6',
+    smiles: 'CC(=O)Oc1ccccc1C(=O)Oc1ccccc1C(=O)O', mw: 300.27,
+    density: 1.4, mp: 159, bp: null, phase: 'solid', cp: 1.2,
+    color: [236, 222, 170], alpha: 0.6,
+    solubility: {
+      water: [[0, 0.02], [100, 0.3]], // est.
+      ethanol: [[0, 5], [25, 10], [60, 30]], // est.
+      acetic_anhydride: [[20, 5], [75, 30]], // est.
+      acetic_acid: [[20, 4], [75, 25]], // est.
+    },
   },
   {
-    id: 'CaCl2', name: 'calcium chloride', formula: 'CaCl2', state: 'solid',
-    density: 2.15, solubility: 74.5, cp: 72.9, heatOfSolution: -82.8,
-    color: 0xfafafa, appearance: 'white, water-absorbing solid',
+    // Lumped brown decomposition products from strong overheating (est. properties).
+    id: 'tar', name: 'brown decomposition products', formula: 'C9H6O3', smiles: 'O=C1Oc2ccccc2C1=O', mw: 162.14,
+    density: 1.3, mp: 90, bp: null, phase: 'solid', cp: 1.2,
+    color: [120, 70, 30], alpha: 3,
+    solubility: { water: [[0, 0.1], [100, 0.5]], ethanol: [[0, 20], [60, 40]], acetic_anhydride: [[20, 20]], acetic_acid: [[20, 20]] },
   },
   {
-    id: 'MnCl2', name: 'manganese(II) chloride', formula: 'MnCl2', state: 'solid',
-    density: 2.98, solubility: 73.9, cp: 72.9, heatOfSolution: -73.0,
-    color: 0xf2b8c6, solutionColor: 0xf6d2dc, appearance: 'pale pink solid',
-  },
-  {
-    id: 'CO2', name: 'carbon dioxide', formula: 'CO2', state: 'gas',
-    cp: 37.1, color: 0xdddddd, appearance: 'colourless gas; puts out flames',
-  },
-  {
-    id: 'O2', name: 'oxygen', formula: 'O2', state: 'gas',
-    cp: 29.4, color: 0xbfe6ff, appearance: 'colourless gas; relights a glowing splint',
-  },
-  {
-    id: 'H2', name: 'hydrogen', formula: 'H2', state: 'gas',
-    cp: 28.8, color: 0xffe9f0, appearance: 'colourless gas; burns with a squeaky pop',
-  },
-  {
-    id: 'Cl2', name: 'chlorine', formula: 'Cl2', state: 'gas',
-    cp: 33.9, color: 0xc8e04a, appearance: 'yellow-green, choking gas',
+    // Violet complex that forms when Fe3+ meets a phenol (salicylic acid has one; aspirin does not).
+    id: 'iron_salicylate', name: 'iron–salicylate complex', formula: 'C7H4FeO3', smiles: 'O=C1O[Fe]Oc2ccccc12', mw: 191.95,
+    density: 1.5, mp: 300, bp: null, phase: 'solid', cp: 1.0,
+    color: [110, 30, 140], alpha: 8,
+    solubility: { water: [[0, 50], [100, 50]] },
   },
 ];
+
+const byId = new Map(SUBSTANCES.map((s) => [s.id, s]));
+
+export function substance(id: string): Substance {
+  const s = byId.get(id);
+  if (!s) throw new Error(`Unknown substance ${id}`);
+  return s;
+}
+
+/** Solubility (g per 100 g solvent) of `solute` in `solvent` at `tC`. 0 if not listed. */
+export function solubility(solute: string, solvent: string, tC: number): number {
+  const pts = substance(solute).solubility?.[solvent];
+  if (!pts?.length) return 0;
+  if (tC <= pts[0][0]) return pts[0][1];
+  for (let i = 1; i < pts.length; i++) {
+    if (tC <= pts[i][0]) {
+      const [t0, s0] = pts[i - 1];
+      const [t1, s1] = pts[i];
+      return s0 + ((s1 - s0) * (tC - t0)) / (t1 - t0);
+    }
+  }
+  return pts[pts.length - 1][1];
+}

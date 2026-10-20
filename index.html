@@ -2,15 +2,44 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>ChemQuest</title>
-    <style>
-      html, body { margin: 0; height: 100%; background: #0d0f14; }
-      #game { display: flex; align-items: center; justify-content: center; height: 100%; }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    />
   </head>
   <body>
-    <div id="game"></div>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="logo">ChemQuest</span>
+          <span class="sub">pixel organic lab</span>
+        </div>
+        <section id="structure" aria-label="Key molecule">
+          <div class="mol">
+            <canvas class="a on" width="300" height="150"></canvas>
+            <canvas class="b" width="300" height="150"></canvas>
+          </div>
+          <div class="meta">
+            <div class="stage" id="mol-stage"></div>
+            <div class="name" id="mol-name"></div>
+            <div class="formula" id="mol-formula"></div>
+          </div>
+        </section>
+        <nav class="modes" id="modes"></nav>
+      </header>
+      <main>
+        <div class="stage-wrap">
+          <canvas id="view"></canvas>
+          <div id="tooltip" hidden></div>
+          <div id="clock"></div>
+        </div>
+        <aside id="panel"></aside>
+      </main>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

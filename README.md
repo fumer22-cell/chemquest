@@ -1,60 +1,45 @@
-# ChemQuest
+# ChemQuest — pixel organic lab
 
-A 2D top-down survival/crafting game where intro chemistry *is* the mechanic.
-You're a chemist stranded on an alien planet: identify minerals, run real
-reactions, and sell prepared solutions — no quizzes, just instruments.
-
-## Run
+A Noita-style falling-sand lab simulator for learning organic synthesis.
+TypeScript + Vite + Canvas 2D, no backend.
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173
-npm test           # chemistry + game-logic unit tests (Vitest)
-npm run build      # typecheck + production build to dist/
+npm run dev     # http://localhost:5173
+npm test        # Vitest: chemistry data, lots, pouring/heating conservation
+npm run build
 ```
 
 ## Controls
 
-- **World:** WASD / arrows to move, **E** to interact (collect minerals, enter the lab, talk to the merchant), **J** for the journal.
-- **Lab:** click a shelf bottle (or a vessel's **From**) as the source, a vessel's **Into** as the target, then hold **Space** to pour (**Shift+Space** to drip). Keys **1–4** pick the target vessel. Hold the valve buttons to move gas (add **Shift** for fine control). **Esc** leaves.
+- **Left-drag** glassware to move it.
+- **Right-drag** (or hold it and use the mouse wheel, or **Q**/**E**) to tilt and pour.
+- Let go and it rights itself and settles on whatever is below (bench, hot plate, bath, balance, shelf).
+- Hover anything to read it.
 
-## Milestone 1 content
-
-- **Survival:** O₂ and water drain over time. Make oxygen by heating KClO₃ with a
-  catalyst in the sealed flask (gas is piped to a 5 L tank that bursts above
-  25 atm). Make water by burning H₂ and O₂ in the recombiner; its chamber has a
-  single gauge, so the ratio has to come from partial pressures. Excess gas is
-  purged, and igniting above 5 atm wrecks the chamber.
-- **Mineral ID:** three unknown samples. Flame test, water and acid tests fill the journal; the journal names a mineral once enough evidence is in.
-- **Trading post:** three molarity/dilution orders. The merchant measures volume and
-  concentration: ±5% earns full pay, ±15% half pay. Credits buy a precision balance or a pH meter.
-
-## Layout
+## Architecture
 
 ```
-src/chem/      pure chemistry engine (no Phaser): formula parsing, molar mass,
-               Mixture (moles, solubility, volume, heat), reactor (limiting
-               reagent, extent, ΔH), gas laws, pH, instruments, flame test
-src/data/      content: elements.json, substances, reactions, minerals,
-               orders, shop, scenario tuning — add content here
-src/game/      game logic (no Phaser): lab bench, journal, life support,
-               order grading, GameState
-src/scenes/    Phaser scenes: World, Lab, TradingPost, Hud, Journal, End
-src/ui/        small UI widgets (buttons, gauges)
-tests/         Vitest suites
+src/config.ts        grid size, mL per pixel, lab seconds per tick
+src/data/            content you edit: substances (with sourced values + comments), glassware
+src/chem/            exact amounts: Lot (moles per substance, one phase), formula parsing
+src/sim/             simulation engine (no DOM):
+  grid.ts            typed-array cellular grid (kind, lot, temperature per pixel)
+  physics.ts         falling-sand motion with gravity in any direction
+  heat.ts            per-pixel heat diffusion and cooling to room air
+  container.ts       glassware with its own local grid; tilt = rotated gravity;
+                     boiling/evaporation/condensation; keeps pixels in step with exact amounts
+  world.ts           shared world grid for pour streams, spills and steam; equipment; supports
+src/render/          320×180 pixel buffer scaled 4×, blurred emissive layer for heat glow
+src/ui/              input, readings, structure panel (SmilesDrawer), placeholder sounds
+src/modes/           Sandbox now; Aspirin level and Challenge mode next
 ```
 
-### How the engine models chemistry
+### How amounts and pixels relate
 
-- Every container holds a `Mixture`: amounts in **moles**, plus temperature.
-  Grams, mL, molarity and pH are always derived from those moles, never stored.
-- Molar masses are computed from formulas and `elements.json`.
-- Water is the solvent. A solute dissolves up to its solubility limit and the
-  rest stays solid. Undissolved solids take up volume according to their
-  density, so displacement readings come out right.
-- A reaction is data: coefficients, ΔH, conditions (min temperature, catalyst,
-  water, spark, minimum molarity) and what the player sees. `react()` works out
-  the extent ξ = min(nᵢ/νᵢ) to find the limiting reagent, leaves the excess
-  behind, and turns ΔH plus heat of solution into a temperature change.
-- Instruments round the hidden true state to their own resolution: 0.1 g
-  balance, ±0.5 mL cylinder, rough beaker marks, gauges, pH paper or meter.
+Each container holds exact amounts in a liquid lot and a solid lot (moles of
+each substance). Every liquid pixel is a 0.05 mL share of the liquid lot. A
+pixel that leaves through the mouth carries its share as a small parcel through
+the world grid and merges into whatever it lands in, so pouring conserves mass
+exactly. When chemistry changes the amounts (dissolving, crystallising,
+reacting, evaporating), the container adds, removes or re-tags pixels to match.
