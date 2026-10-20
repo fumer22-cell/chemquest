@@ -1,13 +1,15 @@
 import { AMBIENT_C, WORLD_H, WORLD_W } from '../config';
+import { stepKinetics, type ReactionDef } from '../chem/kinetics';
 import { freeLot, getLot, newLot, type Lot } from '../chem/lot';
 import { Container } from './container';
+import type { Tool } from './tools';
 import { simEvents } from './events';
 import { CELL, Grid, K } from './grid';
 
 const { FILTER, GAS, LIQUID, POWDER, VOID, WALL } = CELL;
 import { stepGrid } from './physics';
 
-export type EquipmentKind = 'hotplate' | 'bath' | 'balance' | 'shelf' | 'stand';
+export type EquipmentKind = 'hotplate' | 'bath' | 'balance' | 'shelf' | 'stand' | 'hood' | 'mp' | 'waste';
 
 /** Static lab equipment that containers can rest on. */
 export interface Equipment {
@@ -29,12 +31,16 @@ export interface Equipment {
   fixedTemp?: boolean;
   /** Balance: tare (g). */
   tare?: number;
+  /** Text shown on the equipment's display (melting-point apparatus). */
+  display?: string;
 }
 
 /** Where material went that left the glassware. */
 export interface Losses {
   spilledML: number;
   vapourG: number;
+  /** Poured into the waste bin on purpose. */
+  wasteML: number;
 }
 
 /**
@@ -48,9 +54,14 @@ export class World {
   containers: Container[] = [];
   equipment: Equipment[] = [];
   readonly benchY = 164;
-  readonly losses: Losses = { spilledML: 0, vapourG: 0 };
+  readonly losses: Losses = { spilledML: 0, vapourG: 0, wasteML: 0 };
   /** Lab clock (s). */
   labTime = 0;
+  /** Reactions that can happen in this lab (set by the level). */
+  reactions: readonly ReactionDef[] = [];
+  /** Called whenever material lands in a container (before it merges). */
+  onDeliver: (c: Container, parcel: Lot) => void = () => {};
+  tools: Tool[] = [];
 
   constructor() {
     // Bench top is a static wall row.
@@ -101,10 +112,18 @@ export class World {
       const e = this.equipmentById(c.restOn);
       if (e && !c.held && Math.abs(c.angle) < 0.05) {
         if (e.kind === 'hotplate' && e.on) c.heatBottom(e.temp, 0.08);
-        if (e.kind === 'bath' && e.levelY !== undefined) c.immerse(e.levelY, e.temp, 0.05);
+        if (e.kind === 'bath' && e.levelY !== undefined) c.immerse(e.levelY, e.temp, 0.12);
       }
       c.update(this);
+      c.chem.track(c.tempC, dtLab);
+      const stand = e?.kind === 'stand' && c.def.id === 'buchner' ? e : undefined;
+      c.filterRate = stand?.on ? 0.6 : 0.04;
+      const airflow = stand?.on && c.liquid.volumeML() < 0.05 ? 6 : 1;
+      const res = stepKinetics(c.liquid, c.solid, c.tempC, dtLab, c.chem, { reactions: this.reactions, airflow });
+      if (res.heatJ) c.addHeat(res.heatJ);
+      this.losses.vapourG += res.driedG;
     }
+    for (const t of this.tools) t.update(this);
     stepGrid(this.grid, 0, 1, {
       occ: this.occ,
       portal: (i, j, k) => this.portal(i, j, k),
@@ -164,6 +183,8 @@ export class World {
         const A = cs[a];
         const B = cs[b];
         if (A.held || B.held) continue;
+        // A funnel seated on its stand sits in the neck of the flask below.
+        if (this.equipmentById(A.restOn)?.kind === 'stand' || this.equipmentById(B.restOn)?.kind === 'stand') continue;
         const ox = (A.shape.w + B.shape.w) / 2 + 1 - Math.abs(A.x - B.x);
         if (ox <= 0) continue;
         const aTop = A.bottomY - A.shape.h;
@@ -182,7 +203,8 @@ export class World {
     let best: { y: number; id: string | null } = { y: this.benchY, id: null };
     const half = c.shape.w / 2;
     for (const e of this.equipment) {
-      if (e.kind === 'stand') continue;
+      if (e.kind === 'stand' && c.def.id !== 'buchner') continue;
+      if (e.kind === 'hood' || e.kind === 'waste' || (e.kind === 'mp' && c.def.id !== 'watchGlass')) continue;
       const overlaps = c.x + half > e.x + 2 && c.x - half < e.x + e.w - 2;
       if (!overlaps) continue;
       // Baths: containers stand on the floor of the bath.
@@ -259,15 +281,41 @@ export class World {
   }
 
   /** Put a parcel into container `c` at local cell li. */
-  private deliver(c: Container, li: number, k: K, parcel: Lot, t: number): void {
+  deliver(c: Container, li: number, k: K, parcel: Lot, t: number): void {
     if (k === K.Gas) {
       c.grid.put(li, K.Gas, parcel.id, t);
       return;
     }
+    this.onDeliver(c, parcel);
     const dst = k === K.Liquid ? c.liquid : c.solid;
     dst.mergeFrom(parcel);
     freeLot(parcel);
     c.grid.put(li, k, dst.id, t);
+  }
+
+  /**
+   * Release a parcel at a world point (e.g. a drop from a pipette). If the
+   * point is inside a container it goes straight in; otherwise it falls.
+   * Returns false if there was no room.
+   */
+  release(wx: number, wy: number, kind: K, parcel: Lot, tC: number): boolean {
+    const x = Math.floor(wx);
+    const y = Math.floor(wy);
+    if (x < 0 || y < 0 || x >= WORLD_W || y >= WORLD_H) return false;
+    const j = y * WORLD_W + x;
+    const o = this.occ[j];
+    if (o >= 0) {
+      const c = this.containers[o];
+      const li = c.cellAt(x + 0.5, y + 0.5);
+      if (li >= 0 && c.grid.kind[li] === K.Empty) {
+        this.deliver(c, li, kind, parcel, tC);
+        return true;
+      }
+      return false;
+    }
+    if (o === -2 || this.grid.kind[j] !== K.Empty) return false;
+    this.grid.put(j, kind, parcel.id, tC);
+    return true;
   }
 
   /** World particle i falls into container k at world cell j. */
@@ -291,8 +339,26 @@ export class World {
     freeLot(lot);
   }
 
+  /** Liquid or solid that falls into a waste bin is disposed of. */
+  private disposeWaste(): void {
+    for (const e of this.equipment) {
+      if (e.kind !== 'waste') continue;
+      for (let y = e.y + 2; y < Math.min(WORLD_H, e.y + e.h); y++) {
+        for (let x = e.x + 2; x < e.x + e.w - 2; x++) {
+          const j = y * WORLD_W + x;
+          const k = this.grid.kind[j];
+          if (k !== LIQUID && k !== POWDER) continue;
+          const lot = getLot(this.grid.clear(j));
+          this.losses.wasteML += lot.volumeML();
+          freeLot(lot);
+        }
+      }
+    }
+  }
+
   /** Anything in the air or on the bench drifts to room temperature; steam condenses or drifts away. */
   private airborne(): void {
+    this.disposeWaste();
     const { kind, life, temp, lot } = this.grid;
     for (let i = 0; i < kind.length; i++) {
       const k = kind[i];
@@ -319,6 +385,8 @@ export class World {
     this.clearSpills();
     for (const c of this.containers) c.dispose();
     this.containers = [];
+    for (const t of this.tools) if (t.lot) freeLot(t.lot);
+    this.tools = [];
   }
 
   /** Remove everything spilled on the bench or floating in the air. */

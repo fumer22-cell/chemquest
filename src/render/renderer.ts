@@ -3,6 +3,7 @@ import { getLot } from '../chem/lot';
 import type { Container } from '../sim/container';
 import { K } from '../sim/grid';
 import { M_IN } from '../sim/shapes';
+import type { Tool } from '../sim/tools';
 import type { Equipment, World } from '../sim/world';
 import { drawText, textWidth } from './pixelfont';
 
@@ -47,10 +48,11 @@ export class Renderer {
     const glow = this.glowImg.data;
     glow.fill(0);
 
-    for (const e of world.equipment) this.drawEquipmentBack(e, buf, glow);
+    for (const e of world.equipment) this.drawEquipmentBack(e, world, buf, glow);
     this.drawWorldParticles(world, buf, glow);
     for (const c of world.containers) this.drawContainer(c, buf, glow);
     for (const e of world.equipment) this.drawEquipmentFront(e, world, buf, glow);
+    for (const t of world.tools) this.drawTool(t, buf);
 
     this.simCtx.putImageData(this.img, 0, 0);
     this.glowCtx.putImageData(this.glowImg, 0, 0);
@@ -180,9 +182,45 @@ export class Renderer {
     return out;
   }
 
+  /** Tool under the cursor (highlighted). */
+  hoverTool: Tool | null = null;
+
+  private drawTool(t: Tool, buf: Uint8ClampedArray): void {
+    const hl = this.hoverTool === t;
+    const x = Math.round(t.x);
+    const y = Math.round(t.y);
+    if (t.kind === 'rod') {
+      for (let i = 0; i < t.length; i++) blend(buf, (y + i) * W + x, 200, 225, 240, hl ? 0.95 : 0.7);
+      return;
+    }
+    if (t.kind === 'spatula') {
+      for (let i = 0; i < t.length - 4; i++) blend(buf, (y + i) * W + x, 170, 176, 186, hl ? 1 : 0.85);
+      rect(buf, x - 1, y + t.length - 4, 3, 4, hl ? [215, 220, 228] : [180, 186, 196]);
+      if (t.lot && !t.lot.isEmpty()) {
+        const [r, g, b] = t.lot.rgba();
+        rect(buf, x - 1, y + t.length - 6, 3, 2, [r, g, b]);
+      }
+      return;
+    }
+    // Rubber bulb.
+    rect(buf, x - 1, y, 3, 5, hl ? [230, 90, 80] : [190, 60, 55]);
+    // Glass tube, narrowing to the tip.
+    const tube = t.length - 5;
+    const filled = Math.round((t.volumeML() / t.capacityML) * tube);
+    const [r, g, b, a] = t.lot!.rgba();
+    for (let i = 0; i < tube; i++) {
+      const py = y + 5 + i;
+      const fromTip = tube - 1 - i;
+      const wide = i < tube - 6;
+      blend(buf, py * W + x, 190, 220, 240, hl ? 0.9 : 0.6);
+      if (wide) blend(buf, py * W + x - 1, 190, 220, 240, hl ? 0.7 : 0.45);
+      if (fromTip < filled) blend(buf, py * W + x, r, g, b, Math.max(0.6, a));
+    }
+  }
+
   // ---------- equipment ----------
 
-  private drawEquipmentBack(e: Equipment, buf: Uint8ClampedArray, glow: Uint8ClampedArray): void {
+  private drawEquipmentBack(e: Equipment, world: World, buf: Uint8ClampedArray, glow: Uint8ClampedArray): void {
     if (e.kind === 'hotplate') {
       rect(buf, e.x, e.y + 2, e.w, e.h - 2, [52, 56, 64]);
       rect(buf, e.x, e.y + e.h - 1, e.w, 1, [32, 35, 40]);
@@ -205,6 +243,41 @@ export class Renderer {
     } else if (e.kind === 'balance') {
       rect(buf, e.x, e.y, e.w, 2, [190, 194, 200]);
       rect(buf, e.x + 2, e.y + 2, e.w - 4, e.h - 2, [58, 62, 70]);
+    } else if (e.kind === 'hood') {
+      // Fume hood: dark recessed box, lit from the top, sash half down.
+      rect(buf, e.x, e.y, e.w, e.h, [14, 18, 24]);
+      rect(buf, e.x + 2, e.y + 2, e.w - 4, 2, [255, 226, 160], 0.55);
+      for (let x = e.x + 2; x < e.x + e.w - 2; x++) addGlow(glow, (e.y + 3) * W + x, [255, 210, 140], 0.12);
+      rect(buf, e.x, e.y, 2, e.h, [84, 90, 102]);
+      rect(buf, e.x + e.w - 2, e.y, 2, e.h, [84, 90, 102]);
+      rect(buf, e.x, e.y, e.w, 2, [84, 90, 102]);
+      drawText(buf, W, H, e.x + 4, e.y + 6, 'FUME HOOD', [120, 128, 142]);
+    } else if (e.kind === 'stand') {
+      const base = world.benchY;
+      rect(buf, e.x - 2, base - 2, e.w + 4, 2, [70, 74, 84]);
+      rect(buf, e.x + e.w + 1, e.y - 8, 2, base - e.y + 6, [120, 126, 138]);
+      rect(buf, e.x, e.y, e.w, 2, [150, 156, 168]);
+      rect(buf, e.x + e.w, e.y, 3, 2, [150, 156, 168]);
+      // Vacuum hose to the filter flask's side arm.
+      for (let i = 0; i < 14; i++) rect(buf, e.x + e.w + 3 + Math.round(Math.sin(i / 3) * 1.5), base - 26 + i, 2, 1, [60, 64, 70]);
+      rect(buf, e.x + e.w + 6, base - 9, textWidth(e.on ? 'VAC' : 'VAC') + 4, 7, [16, 18, 22]);
+      drawText(buf, W, H, e.x + e.w + 8, base - 8, 'VAC', e.on ? [110, 255, 150] : [90, 96, 110]);
+      if (e.on) addGlow(glow, (base - 6) * W + e.x + e.w + 10, [40, 200, 90], 0.5);
+    } else if (e.kind === 'mp') {
+      rect(buf, e.x, e.y, e.w, 2, [180, 184, 192]);
+      rect(buf, e.x + 1, e.y + 2, e.w - 2, e.h - 2, [62, 52, 58]);
+      const txt = e.display ?? '---';
+      rect(buf, e.x + 3, e.y + 5, e.w - 6, 7, [12, 30, 20]);
+      drawText(buf, W, H, e.x + 4, e.y + 6, txt.slice(0, Math.floor((e.w - 8) / 4)), [110, 255, 150]);
+      if (e.temp > 40) {
+        const hot = Math.min(1, (e.temp - 40) / 120);
+        for (let x = e.x + 2; x < e.x + e.w - 2; x++) addGlow(glow, e.y * W + x, heatColor(e.temp), hot * 0.6);
+      }
+    } else if (e.kind === 'waste') {
+      rect(buf, e.x, e.y, e.w, e.h, [44, 52, 46]);
+      rect(buf, e.x + 2, e.y + 2, e.w - 4, 3, [20, 24, 22]);
+      rect(buf, e.x, e.y, e.w, 2, [70, 82, 72]);
+      drawText(buf, W, H, e.x + 3, e.y + 9, 'WASTE', [230, 200, 80]);
     } else if (e.kind === 'shelf') {
       rect(buf, e.x, e.y, e.w, 3, [92, 70, 52]);
       rect(buf, e.x, e.y + 3, e.w, 1, [50, 38, 28]);
@@ -279,9 +352,10 @@ function heatColor(tC: number): RGB {
   return [255, 90 + 120 * t, 30 + 80 * t * t];
 }
 
+/** Bath water stays blue; it only warms slightly in tone (the glow layer shows heat). */
 function bathColor(tC: number): RGB {
   const t = Math.min(1, Math.max(0, (tC - 20) / 80));
-  return [90 + 60 * t, 150 - 20 * t, 220 - 70 * t];
+  return [80 + 25 * t, 150 - 5 * t, 220 - 25 * t];
 }
 
 /** Static backdrop: tiled lab wall, fume hood frame, bench. */

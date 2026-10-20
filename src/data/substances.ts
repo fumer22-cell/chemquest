@@ -98,7 +98,7 @@ export const SUBSTANCES: Substance[] = [
     color: [250, 250, 252], alpha: 0,
     solubility: {
       water: [[0, 0.12], [25, 0.33], [37, 1.0], [60, 1.9], [80, 3.0], [100, 4.5]], // est. above 37 °C
-      ethanol: [[0, 15], [25, 25], [60, 60]],
+      ethanol: [[0, 15], [25, 25], [60, 60], [78, 90]], // est. above 60 °C
       acetic_anhydride: [[20, 8], [75, 40], [100, 60]], // est.
       acetic_acid: [[20, 5], [75, 35], [100, 55]], // est.
     },
@@ -125,10 +125,17 @@ export const SUBSTANCES: Substance[] = [
   },
   {
     // Violet complex that forms when Fe3+ meets a phenol (salicylic acid has one; aspirin does not).
-    id: 'iron_salicylate', name: 'iron–salicylate complex', formula: 'C7H4FeO3', smiles: 'O=C1O[Fe]Oc2ccccc12', mw: 191.95,
+    // FeCl3 + C7H6O3 → [Fe(C7H4O3)]Cl + 2 HCl
+    id: 'iron_salicylate', name: 'iron(III)–salicylate complex', formula: 'C7H4ClFeO3', smiles: 'O=C1O[Fe](Cl)Oc2ccccc12', mw: 227.4,
     density: 1.5, mp: 300, bp: null, phase: 'solid', cp: 1.0,
     color: [110, 30, 140], alpha: 8,
     solubility: { water: [[0, 50], [100, 50]] },
+  },
+  {
+    // By-product of the ferric chloride test. Kept in solution (not volatile in the game).
+    id: 'hcl', name: 'hydrochloric acid', formula: 'HCl', smiles: 'Cl', mw: 36.458,
+    density: 1.19, mp: -27, bp: null, phase: 'liquid', cp: 3.0,
+    color: [230, 235, 225], alpha: 0.05,
   },
 ];
 

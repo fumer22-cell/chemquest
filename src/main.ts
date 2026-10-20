@@ -1,6 +1,7 @@
 import './style.css';
 import { LAB_SECONDS_PER_TICK, SCALE } from './config';
 import type { AppContext, Mode } from './modes/mode';
+import { AspirinMode } from './modes/aspirin';
 import { SandboxMode } from './modes/sandbox';
 import { Renderer } from './render/renderer';
 import { resetSimEvents } from './sim/events';
@@ -22,16 +23,24 @@ const ctx: AppContext = {
   panel: $('panel'),
   sfx,
   speed: 1,
+  paused: false,
+  restart: () => setMode(current),
 };
 ctx.input = new Input(canvas, () => ctx.world);
 ctx.input.onGesture = () => sfx.unlock();
 ctx.input.onClick = (c, x, y) => mode.click?.(c, x, y, ctx);
+ctx.input.onToolAct = (t, fine) => {
+  if (ctx.paused) return;
+  if (mode.toolAct) mode.toolAct(t, ctx, fine);
+  else t.act(ctx.world, fine);
+};
 
 const MODES: { make: () => Mode; label: string; disabled?: boolean }[] = [
+  { make: () => new AspirinMode(), label: 'Level 1 · Aspirin' },
   { make: () => new SandboxMode(), label: 'Sandbox' },
-  { make: () => new SandboxMode(), label: 'Level 1 · Aspirin (coming next)', disabled: true },
-  { make: () => new SandboxMode(), label: 'Challenge (later)', disabled: true },
+  { make: () => new AspirinMode(true), label: 'Challenge (preview)' },
 ];
+let current = 0;
 
 let mode: Mode = MODES[0].make();
 const nav = $('modes');
@@ -44,6 +53,8 @@ MODES.forEach((m, i) => {
 });
 
 function setMode(i: number): void {
+  current = i;
+  ctx.paused = false;
   ctx.world.dispose();
   mode = MODES[i].make();
   ctx.speed = 1;
@@ -64,9 +75,10 @@ function frame(now: number): void {
   last = now;
   resetSimEvents();
   ctx.input.update(dt);
-  for (let t = 0; t < ctx.speed; t++) ctx.world.update(LAB_SECONDS_PER_TICK);
+  if (!ctx.paused) for (let t = 0; t < ctx.speed; t++) ctx.world.update(LAB_SECONDS_PER_TICK);
   mode.frame?.(ctx);
   renderer.hover = ctx.input.hover();
+  renderer.hoverTool = ctx.input.hoverTool();
   renderer.draw(ctx.world);
   sfx.update();
 
@@ -76,25 +88,29 @@ function frame(now: number): void {
     mode.refresh?.(ctx);
     updateTooltip();
     const s = Math.floor(ctx.world.labTime);
-    clock.textContent = `lab time ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}${ctx.speed > 1 ? `  ▶▶ ${ctx.speed}×` : ''}`;
+    clock.textContent = `lab time ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}${ctx.paused ? '  ❚❚ paused' : ctx.speed > 1 ? `  ▶▶ ${ctx.speed}×` : ''}`;
   }
   requestAnimationFrame(frame);
 }
 
 function updateTooltip(): void {
   const c = ctx.input.hover();
-  if (!c) {
+  const t = ctx.input.hoverTool();
+  if (!c && !(t && mode.toolTooltip)) {
     tooltip.hidden = true;
     return;
   }
   tooltip.hidden = false;
-  tooltip.innerHTML = mode.tooltip(c, ctx);
+  tooltip.innerHTML = c ? mode.tooltip(c, ctx) : mode.toolTooltip!(t!, ctx);
   const r = canvas.getBoundingClientRect();
   const sx = r.width / canvas.width;
-  const [, y0, x1] = c.bounds();
+  const [, y0, x1] = c ? c.bounds() : [0, t!.y, t!.x + 3];
   const px = Math.min(r.width - tooltip.offsetWidth - 4, x1 * SCALE * sx + 8);
   tooltip.style.left = `${Math.max(4, px)}px`;
   tooltip.style.top = `${Math.max(4, y0 * SCALE * sx)}px`;
 }
 
 requestAnimationFrame(frame);
+
+// Handy for debugging from the browser console.
+Object.assign(window as object, { __ctx: ctx, __mode: () => mode });

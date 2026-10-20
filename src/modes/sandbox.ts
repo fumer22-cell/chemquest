@@ -1,6 +1,7 @@
 import { newLot } from '../chem/lot';
 import { GLASSWARE } from '../data/glassware';
 import { Container } from '../sim/container';
+import { Tool } from '../sim/tools';
 import { World } from '../sim/world';
 import { composition, tempReading, volumeReading } from '../ui/readings';
 import type { AppContext, Mode } from './mode';
@@ -40,6 +41,7 @@ export class SandboxMode implements Mode {
     w.add(new Container(GLASSWARE.cylinder10, 84, 130));
     w.add(new Container(GLASSWARE.beaker50, 190, 100));
 
+    w.tools = [new Tool('pipette', 100, 20), new Tool('rod', 106, 14), new Tool('spatula', 112, 22)];
     ctx.structure.show('water', 'Sandbox');
     this.buildPanel(ctx);
   }
@@ -143,6 +145,10 @@ export class SandboxMode implements Mode {
     p.querySelectorAll<HTMLButtonElement>('#speed button').forEach((b) => b.classList.toggle('on', +b.dataset.speed! === ctx.speed));
     const l = ctx.world.losses;
     set('stats', `Spilled: ${l.spilledML.toFixed(1)} mL · Lost as vapour: ${l.vapourG.toFixed(2)} g`);
+  }
+
+  toolTooltip(t: Tool): string {
+    return `<b>${t.label}</b>\n${t.kind === 'pipette' ? `Holds ${t.volumeML().toFixed(2)} mL. Click to fill or drop.` : t.kind === 'spatula' ? 'Click in crystals to scoop, click again to tip out.' : 'Drag inside a flask to stir.'}`;
   }
 
   tooltip(c: Container): string {

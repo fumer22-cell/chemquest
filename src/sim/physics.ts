@@ -18,6 +18,10 @@ export interface StepHooks {
   portal?(i: number, j: number, k: number): boolean;
   /** Probability per tick that liquid seeps through a filter cell (vacuum raises it). */
   filterRate?: number;
+  /** 0..1: the container is being shaken, so piled crystals get knocked loose. */
+  agitation?: number;
+  /** Probability per tick that liquid seeps down into a crystal bed (vacuum raises it). */
+  percolation?: number;
 }
 
 /** Liquids look this many cells sideways per tick when they can't fall. */
@@ -71,6 +75,7 @@ const B = (k: K) => 1 << k;
 const POWDER_INTO = B(K.Empty) | B(K.Gas) | B(K.Liquid);
 const LIQUID_INTO = B(K.Empty) | B(K.Gas);
 const GAS_INTO = B(K.Empty) | B(K.Liquid);
+const PERCOLATE = B(K.Powder);
 
 /**
  * Move the particle at i to (nx, ny) if allowed. `into` is a bitmask of the
@@ -100,11 +105,25 @@ function movePowder(g: Grid, i: number, x: number, y: number, d: number, s: numb
   const d1 = (d + side) % 8;
   const d2 = (d + 8 - side) % 8;
   if (tryMove(g, i, x + DX[d1], y + DY[d1], s, hk, POWDER_INTO) !== BLOCKED) return;
-  tryMove(g, i, x + DX[d2], y + DY[d2], s, hk, POWDER_INTO);
+  if (tryMove(g, i, x + DX[d2], y + DY[d2], s, hk, POWDER_INTO) !== BLOCKED) return;
+  // Crystals suspended in liquid (a slurry) are carried along sideways with it,
+  // and shaking the container knocks piled crystals loose.
+  if ((touchesLiquid(g, x, y) && Math.random() < 0.5) || Math.random() < (hk.agitation ?? 0) * 0.6) {
+    const sd = (d + (Math.random() < 0.5 ? 2 : 6)) % 8;
+    tryMove(g, i, x + DX[sd], y + DY[sd], s, hk, POWDER_INTO);
+  }
+}
+
+function touchesLiquid(g: Grid, x: number, y: number): boolean {
+  const { w, h, kind } = g;
+  const i = y * w + x;
+  return (x > 0 && kind[i - 1] === LIQUID) || (x < w - 1 && kind[i + 1] === LIQUID) || (y > 0 && kind[i - w] === LIQUID) || (y < h - 1 && kind[i + w] === LIQUID);
 }
 
 function moveLiquid(g: Grid, i: number, x: number, y: number, d: number, s: number, hk: StepHooks): void {
   if (tryMove(g, i, x + DX[d], y + DY[d], s, hk, LIQUID_INTO) !== BLOCKED) return;
+  // Liquid soaks down through a bed of crystals.
+  if (Math.random() < (hk.percolation ?? 0.08) && tryMove(g, i, x + DX[d], y + DY[d], s, hk, PERCOLATE) === FREE) return;
   // Seep through filter paper: hop over the filter cell if the cell beyond is free.
   const fx = x + DX[d];
   const fy = y + DY[d];

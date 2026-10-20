@@ -1,4 +1,5 @@
 import { AMBIENT_C, VOL_PER_PX } from '../config';
+import { ChemState } from '../chem/kinetics';
 import { freeLot, getLot, newLot, type Lot } from '../chem/lot';
 import type { GlasswareDef } from '../data/glassware';
 import { CELL, Grid, K } from './grid';
@@ -50,7 +51,11 @@ export class Container {
   filterRate = 0.05;
   /** Stock-bottle supply volume kept topped up in the visible pixels. */
   reservoir: boolean;
+  /** Chemistry bookkeeping (temperature history, extents, stirring). */
+  readonly chem = new ChemState();
   private tick = 0;
+  private lastAngle = 0;
+  private lastX = 0;
 
   constructor(
     readonly def: GlasswareDef,
@@ -216,12 +221,19 @@ export class Container {
 
   update(host: ContainerHost): void {
     this.tick++;
+    // Swirling: how fast it is being rocked or shaken while held.
+    const motion = this.held ? Math.abs(this.angle - this.lastAngle) * 8 + Math.abs(this.x - this.lastX) * 0.15 : 0;
+    this.chem.stir += (Math.min(1, motion) - this.chem.stir) * 0.05;
+    this.lastAngle = this.angle;
+    this.lastX = this.x;
     const g = this.grid;
     const gx = Math.sin(this.angle);
     const gy = Math.cos(this.angle);
     stepGrid(g, gx, gy, {
       exit: (i, nx, ny) => host.emit(this, i, nx, ny),
       filterRate: this.filterRate,
+      agitation: this.held ? this.chem.stir : 0,
+      percolation: this.filterRate > 0.1 ? 0.6 : 0.08,
     });
     conductHeat(g, AMBIENT_C);
     this.mixAndPhase();
