@@ -1,7 +1,7 @@
 import { LAB_SECONDS_PER_TICK } from '../config';
 import { newLot, type Lot } from '../chem/lot';
 import { GLASSWARE } from '../data/glassware';
-import { PROCEDURE, REACTIONS, STEPS, STOCKS } from '../data/levels/aspirin';
+import { MANUAL_INTRO, PROCEDURE, REACTIONS, STEPS, STOCKS } from '../data/levels/aspirin';
 import { substance } from '../data/substances';
 import { addToInventory } from '../game/inventory';
 import { buildDebrief, analyseProduct, type AspirinRecord } from '../levels/aspirinDebrief';
@@ -35,9 +35,7 @@ export class AspirinMode implements Mode {
   /** Grams of each substance delivered into each container. */
   private added = new Map<number, Map<string, number>>();
   private done: boolean[] = [];
-  private safetyShown = new Set<number>();
   private notes: { text: string; tone: Tone }[] = [];
-  private stepsKey = '';
   private finished = false;
   private lastHoodWarning = -Infinity;
   private rec!: AspirinRecord;
@@ -56,6 +54,13 @@ export class AspirinMode implements Mode {
     productShown: false,
     weighed: false,
   };
+
+  /** The structure bar follows these: starting material, product, side products, test complex. */
+  focus = ['aspirin', 'salicylic_acid', 'assa', 'tar', 'iron_salicylate'];
+
+  defaultWorking(): Container | null {
+    return this.F ?? null;
+  }
 
   constructor(private challenge = false) {
     this.id = challenge ? 'challenge' : 'aspirin';
@@ -87,7 +92,7 @@ export class AspirinMode implements Mode {
     w.equip({ id: 'ice', kind: 'bath', label: 'Ice bath', x: 226, y: 132, w: 60, h: 32, levelY: 140, temp: 1, setpoint: 1, fixedTemp: true });
     w.equip({ id: 'waste', kind: 'waste', label: 'Waste', x: 40, y: 140, w: 30, h: 24 });
     w.equip({ id: 'stand', kind: 'stand', label: 'Filter stand (vacuum)', x: 288, y: 131, w: 30, h: 2 });
-    this.mp = w.equip({ id: 'mp', kind: 'mp', label: 'Melting-point apparatus', x: 288, y: 32, w: 30, h: 12, display: '---' });
+    this.mp = w.equip({ id: 'mp', kind: 'mp', label: 'Melting-point apparatus', x: 286, y: 24, w: 32, h: 20, display: '---' });
 
     // Stock bottles.
     this.stocks = [];
@@ -126,29 +131,8 @@ export class AspirinMode implements Mode {
     w.tools = [new Tool('pipette', 10, 139, 'Pipette A'), new Tool('pipette', 17, 139, 'Pipette B'), new Tool('rod', 24, 133), new Tool('spatula', 31, 141)];
     w.onDeliver = (c, parcel) => this.onDeliver(c, parcel);
 
-    ctx.structure.show('salicylic_acid', this.challenge ? 'Target: aspirin. Starting material' : 'Starting material');
     this.buildPanel();
     this.note(this.challenge ? 'Goggles on. No procedure this time: make aspirin.' : 'Goggles on. Read step 1, then begin.', 'info');
-    if (!this.challenge) void this.intro();
-  }
-
-  private async intro(): Promise<void> {
-    this.ctx.paused = true;
-    await showModal({
-      title: 'Level 1: Synthesis of aspirin',
-      html: `<p>Acetylate <b>salicylic acid</b> with <b>acetic anhydride</b>, using phosphoric acid as a catalyst. Then isolate, purify and test your aspirin.</p>
-        <p>The procedure on the right checks off as you work. You can deviate from it, and the chemistry will play out.</p>
-        <ul>
-          <li><b>Drag</b> glassware to move it. <b>Right-drag</b> it, or hold it and use the wheel or <kbd>Q</kbd>/<kbd>E</kbd>, to tilt and pour.</li>
-          <li><b>Pipettes:</b> drag the tip into a liquid and click it to fill, then click over a flask for one drop. <kbd>Space</kbd> also squeezes while you hold it.</li>
-          <li><b>Spatula:</b> click with its tip in crystals to scoop them up (<kbd>Shift</kbd>+click for just a pinch), then click over another vessel to tip them out.</li>
-          <li><b>Glass rod:</b> drag it inside a flask to stir. Rubbing it on the glass scratches, which starts crystals forming.</li>
-          <li>Shake a held vessel (rock it quickly) to knock stuck crystals loose.</li>
-          <li>Hover anything to read its volume and temperature. Use fast-forward while you wait.</li>
-        </ul>`,
-      buttons: [{ label: 'Start', primary: true, value: 'ok' }],
-    });
-    this.ctx.paused = false;
   }
 
   // ---------- events ----------
@@ -239,7 +223,7 @@ export class AspirinMode implements Mode {
     }
     if (!this.flags.productShown && saMol > 0 && r.aspirinMadeMol / saMol > 0.5) {
       this.flags.productShown = true;
-      ctx.structure.show('aspirin', 'Product forming');
+      this.note('Over half of the salicylic acid has become aspirin.', 'good');
     }
     const f50 = this.F50;
     if (!this.flags.f50Dissolved && this.addedG(f50, 'ethanol') > 1.5 && f50.liquid.grams('aspirin') > 0.8 && f50.solid.grams('aspirin') < 0.03) {
@@ -296,47 +280,34 @@ export class AspirinMode implements Mode {
     ];
   }
 
-  // ---------- panel ----------
+  // ---------- panel: the lab manual ----------
+
+  /** Page shown: 0 = introduction, 1..N = steps. */
+  private page = 0;
+  private lastCurrent = -2;
 
   private buildPanel(): void {
     const p = this.ctx.panel;
     p.innerHTML = `
-      <h2>${this.title}</h2>
-      ${
-        this.challenge
-          ? '<p class="hint"><b>Challenge mode preview.</b> No procedure, only the target. Make aspirin from what is on the shelf, then finish to see how you did. (The full Challenge mode is planned.)</p>'
-          : `<div class="group"><h3>Procedure</h3><ol class="steps" id="steps"></ol></div>`
-      }
-      <div class="group">
-        <h3>Water bath</h3>
-        <div class="row"><label for="bath-set">Setpoint</label><output id="bath-out"></output></div>
-        <input id="bath-set" type="range" min="25" max="99" step="1" />
-        <div class="row"><button id="bath-on">Turn on</button><span class="stat" id="bath-temp"></span></div>
-      </div>
-      <div class="group">
-        <h3>Bench</h3>
-        <div class="row"><button id="tare">Tare balance</button><button id="vac">Vacuum: off</button><button id="mp-run">Run melting point</button></div>
-        <div class="row" id="speed"></div>
+      <div class="manual">
+        <div class="manual-head">
+          <span class="kicker">${this.challenge ? 'Challenge · no procedure' : 'Lab manual · Exp. 1'}</span>
+          <span class="pg" id="pg"></span>
+          <button id="prev" aria-label="Previous page">◂</button><button id="next" aria-label="Next page">▸</button>
+        </div>
+        <article class="page" id="page"></article>
+        ${this.challenge ? '' : '<ol class="toc" id="toc"></ol>'}
       </div>
       <div class="group"><h3>Lab notebook</h3><div class="notebook" id="notebook"></div></div>
+      <div class="group"><h3>Time</h3><div class="row" id="speed"></div></div>
       <div class="row"><button id="finish" class="primary">Finish and analyse</button><button id="restart">Restart level</button><button id="mute">Sound on</button></div>`;
     const $ = <T extends HTMLElement>(id: string) => p.querySelector(`#${id}`) as T;
-    const w = () => this.ctx.world;
-    const bath = () => w().equipmentById('bath')!;
-    const set = $<HTMLInputElement>('bath-set');
-    set.value = String(bath().setpoint);
-    set.oninput = () => (bath().setpoint = +set.value);
-    $('bath-on').onclick = () => (bath().on = !bath().on);
-    $('tare').onclick = () => {
-      const bal = w().equipmentById('balance')!;
-      const on = w().containers.find((c) => c.restOn === 'balance' && !c.held);
-      bal.tare = on ? on.grossMass() : 0;
+    const turn = (d: number) => {
+      this.page = Math.max(0, Math.min(this.challenge ? 0 : STEPS.length, this.page + d));
+      this.renderPage();
     };
-    $('vac').onclick = () => {
-      const st = w().equipmentById('stand')!;
-      st.on = !st.on;
-    };
-    $('mp-run').onclick = () => void this.runMeltingPoint();
+    $('prev').onclick = () => turn(-1);
+    $('next').onclick = () => turn(1);
     const speed = $('speed');
     for (const n of [1, 4, 16]) {
       const b = document.createElement('button');
@@ -352,7 +323,10 @@ export class AspirinMode implements Mode {
       this.ctx.sfx.muted = !this.ctx.sfx.muted;
       mute.textContent = this.ctx.sfx.muted ? 'Sound off' : 'Sound on';
     };
-    this.refresh(this.ctx);
+    this.ctx.world.onAction = (id) => {
+      if (id === 'mp') void this.runMeltingPoint();
+    };
+    this.renderPage();
     this.renderNotes();
   }
 
@@ -363,68 +337,97 @@ export class AspirinMode implements Mode {
     el.scrollTop = el.scrollHeight;
   }
 
-  refresh(ctx: AppContext): void {
-    const p = ctx.panel;
-    const w = ctx.world;
-    const bath = w.equipmentById('bath')!;
-    const stand = w.equipmentById('stand')!;
-    const setText = (id: string, t: string) => {
-      const el = p.querySelector(`#${id}`);
-      if (el && el.textContent !== t) el.textContent = t;
-    };
-    setText('bath-out', `${bath.setpoint} °C`);
-    setText('bath-on', bath.on ? 'Turn off' : 'Turn on');
-    p.querySelector('#bath-on')?.classList.toggle('on', bath.on);
-    setText('bath-temp', `water ${bath.temp.toFixed(1)} °C`);
-    setText('vac', `Vacuum: ${stand.on ? 'on' : 'off'}`);
-    p.querySelector('#vac')?.classList.toggle('on', stand.on);
-    const mpBtn = p.querySelector('#mp-run') as HTMLButtonElement | null;
-    if (mpBtn) mpBtn.disabled = this.flags.mpRunning || !w.containers.some((c) => c.restOn === 'mp' && c.solid.totalGrams() > 0.01);
-    p.querySelectorAll<HTMLButtonElement>('#speed button').forEach((b) => b.classList.toggle('on', +b.dataset.speed! === ctx.speed));
-
-    if (this.challenge || this.finished) return;
-    const checks = this.stepChecks();
-    checks.forEach((c, i) => {
-      if (c) this.done[i] = true;
-    });
+  private renderPage(): void {
+    const p = this.ctx.panel;
+    const el = p.querySelector('#page');
+    if (!el) return;
     const current = this.done.findIndex((d) => !d);
-    const key = this.done.map((d) => (d ? 1 : 0)).join('') + current;
-    if (key !== this.stepsKey) {
-      this.stepsKey = key;
-      const list = p.querySelector('#steps');
-      if (list) {
-        list.innerHTML = STEPS.map((s, i) => {
-          const cls = this.done[i] ? 'done' : i === current ? 'current' : '';
-          const detail =
-            i === current ? `<div class="detail">${s.detail}${s.safety.length ? `<br><button data-safety="${i}">Safety notes</button>` : ''}</div>` : '';
-          return `<li class="${cls}"><span>${s.title}</span>${detail}</li>`;
-        }).join('');
-        list.querySelectorAll<HTMLButtonElement>('button[data-safety]').forEach((b) => (b.onclick = () => void this.showSafety(+b.dataset.safety!)));
-        list.querySelector('li.current')?.scrollIntoView({ block: 'nearest' });
-      }
-      if (current >= 0 && !this.safetyShown.has(current) && STEPS[current].safety.length && current > 0) void this.showSafety(current);
-      if (current === 0 && !this.safetyShown.has(0)) this.safetyShown.add(0);
+    const total = STEPS.length;
+    (p.querySelector('#pg') as HTMLElement).textContent = this.challenge ? '' : `p. ${this.page + 1} / ${total + 1}`;
+    (p.querySelector('#prev') as HTMLButtonElement).disabled = this.page === 0;
+    (p.querySelector('#next') as HTMLButtonElement).disabled = this.challenge || this.page === total;
+    if (this.page === 0) {
+      el.innerHTML = this.challenge
+        ? `<h3>Make aspirin</h3>
+           <div class="eq">${MANUAL_INTRO.equation}</div>
+           <p>No procedure this time: only the target. Use what is on the shelf, then press Finish to see how you did. (The full Challenge mode is planned.)</p>
+           <section class="sec"><h4>Controls</h4><ul>${MANUAL_INTRO.controls.map((c) => `<li>${c}</li>`).join('')}</ul></section>`
+        : `<div class="step-no">Introduction</div>
+           <h3>${MANUAL_INTRO.title}</h3>
+           <div class="eq">${MANUAL_INTRO.equation}</div>
+           <p class="eq-names">${MANUAL_INTRO.equationNames}</p>
+           ${MANUAL_INTRO.text.map((t) => `<p>${t}</p>`).join('')}
+           <section class="sec"><h4>How to work at this bench</h4><ul>${MANUAL_INTRO.controls.map((c) => `<li>${c}</li>`).join('')}</ul></section>
+           <aside class="safety"><h4>Safety</h4><ul><li>Goggles, gloves and a lab coat at all times.</li><li>Acetic anhydride and phosphoric acid are corrosive; anhydride vapour belongs in the fume hood.</li></ul></aside>`;
+    } else {
+      const i = this.page - 1;
+      const s = STEPS[i];
+      const status = this.done[i] ? '<span class="stamp done">Done</span>' : i === current ? '<span class="stamp now">Now</span>' : '';
+      el.innerHTML = `
+        <div class="step-no">Step ${i + 1} of ${total} ${status}</div>
+        <h3>${s.title}</h3>
+        <section class="sec do"><h4>Procedure</h4><p>${s.detail}</p></section>
+        <section class="sec why"><h4>Why</h4><p>${s.why}</p></section>
+        ${
+          s.adds?.length
+            ? `<section class="sec adds"><h4>What you add, and why</h4><dl>${s.adds.map((a) => `<dt>${a.what}</dt><dd>${a.why}</dd>`).join('')}</dl></section>`
+            : ''
+        }
+        ${s.reaction ? `<section class="sec rxn"><h4>Reaction</h4><div class="eq">${s.reaction.equation}</div><p>${s.reaction.note}</p></section>` : ''}
+        ${s.watch ? `<section class="sec watch"><h4>Watch for</h4><p>${s.watch}</p></section>` : ''}
+        ${s.safety.length ? `<aside class="safety"><h4>Safety</h4><ul>${s.safety.map((x) => `<li>${x}</li>`).join('')}</ul></aside>` : ''}`;
+    }
+    const toc = p.querySelector('#toc');
+    if (toc) {
+      toc.innerHTML = STEPS.map((s, k) => {
+        const cls = [this.done[k] ? 'done' : '', k === current ? 'current' : '', k === this.page - 1 ? 'viewing' : ''].join(' ');
+        return `<li class="${cls}"><button data-page="${k + 1}">${s.title}</button></li>`;
+      }).join('');
+      toc.querySelectorAll<HTMLButtonElement>('button[data-page]').forEach(
+        (b) =>
+          (b.onclick = () => {
+            this.page = +b.dataset.page!;
+                  this.renderPage();
+          }),
+      );
     }
   }
 
-  private async showSafety(i: number): Promise<void> {
-    this.safetyShown.add(i);
-    const s = STEPS[i];
-    const was = this.ctx.paused;
-    this.ctx.paused = true;
-    await showModal({
-      title: `Safety: ${s.title}`,
-      html: `<ul class="safety">${s.safety.map((x) => `<li>${x}</li>`).join('')}</ul>`,
-      buttons: [{ label: 'Got it', primary: true, value: 'ok' }],
+  refresh(ctx: AppContext): void {
+    const p = ctx.panel;
+    p.querySelectorAll<HTMLButtonElement>('#speed button').forEach((b) => b.classList.toggle('on', +b.dataset.speed! === ctx.speed));
+    if (this.challenge || this.finished) return;
+    const checks = this.stepChecks();
+    let changed = false;
+    checks.forEach((c, i) => {
+      if (c && !this.done[i]) {
+        this.done[i] = true;
+        changed = true;
+        this.note(`✓ Step ${i + 1} done: ${STEPS[i].title.toLowerCase().replace(/^./, (m) => m.toUpperCase())}.`, 'good');
+      }
     });
-    this.ctx.paused = was;
+    const current = this.done.findIndex((d) => !d);
+    if (current !== this.lastCurrent) {
+      // Turn to the new step (the introduction stays up until step 1 is done).
+      if (this.lastCurrent !== -2 || current > 0) {
+        this.page = current < 0 ? STEPS.length : current + 1;
+      }
+      this.lastCurrent = current;
+      changed = true;
+    }
+    if (changed) this.renderPage();
   }
 
   // ---------- instruments ----------
 
   private async runMeltingPoint(): Promise<void> {
+    if (this.flags.mpRunning) return;
     const c = this.ctx.world.containers.find((x) => x.restOn === 'mp' && x.solid.totalGrams() > 0.01);
-    if (!c) return;
+    if (!c) {
+      this.mp.display = 'EMPTY';
+      this.note('Melting point: put the watch glass with your crystals on the apparatus first.', 'warn');
+      return;
+    }
     const a = analyseProduct(c.solid);
     this.flags.mpRunning = true;
     const e = this.mp;

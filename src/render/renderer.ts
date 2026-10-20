@@ -3,6 +3,7 @@ import { getLot } from '../chem/lot';
 import type { Container } from '../sim/container';
 import { K } from '../sim/grid';
 import { M_IN } from '../sim/shapes';
+import { equipmentControls } from '../sim/controls';
 import type { Tool } from '../sim/tools';
 import type { Equipment, World } from '../sim/world';
 import { drawText, textWidth } from './pixelfont';
@@ -52,6 +53,7 @@ export class Renderer {
     this.drawWorldParticles(world, buf, glow);
     for (const c of world.containers) this.drawContainer(c, buf, glow);
     for (const e of world.equipment) this.drawEquipmentFront(e, world, buf, glow);
+    this.drawControls(world, buf, glow);
     for (const t of world.tools) this.drawTool(t, buf);
 
     this.simCtx.putImageData(this.img, 0, 0);
@@ -184,6 +186,31 @@ export class Renderer {
 
   /** Tool under the cursor (highlighted). */
   hoverTool: Tool | null = null;
+  /** Equipment button under the cursor. */
+  hoverControl: string | null = null;
+
+  /** Buttons and readouts on the equipment (bench front strip, apparatus keys). */
+  private drawControls(world: World, buf: Uint8ClampedArray, glow: Uint8ClampedArray): void {
+    const { controls, displays } = equipmentControls(world);
+    for (const d of displays) {
+      rect(buf, d.x, d.y, d.w, 9, [14, 16, 20]);
+      drawText(buf, W, H, d.x + Math.max(1, Math.floor((d.w - textWidth(d.text)) / 2)), d.y + 2, d.text, d.color);
+    }
+    for (const c of controls) {
+      const hover = this.hoverControl === c.id;
+      const face: RGB = c.lit ? [70, 120, 80] : hover ? [96, 106, 126] : [62, 68, 82];
+      rect(buf, c.x, c.y, c.w, c.h, [24, 26, 32]);
+      rect(buf, c.x, c.y, c.w, c.h - 1, face);
+      rect(buf, c.x, c.y, c.w, 1, [face[0] + 30, face[1] + 30, face[2] + 30]);
+      drawText(buf, W, H, c.x + Math.floor((c.w - textWidth(c.text)) / 2), c.y + 2, c.text, c.lit ? [170, 255, 180] : [225, 230, 240]);
+      if (c.lit) for (let x = c.x + 1; x < c.x + c.w - 1; x++) addGlow(glow, (c.y + 4) * W + x, [60, 220, 100], 0.25);
+      if (hover) for (let x = c.x; x < c.x + c.w; x++) addGlow(glow, (c.y + 4) * W + x, [150, 170, 220], 0.15);
+    }
+    // Ice bath label on the bench front.
+    for (const e of world.equipment) {
+      if (e.kind === 'bath' && e.fixedTemp) drawText(buf, W, H, e.x + 2, 168, `ICE BATH ${Math.round(e.temp)}°`, [150, 200, 240]);
+    }
+  }
 
   private drawTool(t: Tool, buf: Uint8ClampedArray): void {
     const hl = this.hoverTool === t;
@@ -228,9 +255,9 @@ export class Renderer {
       const top: RGB = [200 + 55 * hot, 200 - 120 * hot, 200 - 170 * hot];
       rect(buf, e.x + 1, e.y, e.w - 2, 2, top);
       if (hot > 0) for (let x = e.x + 2; x < e.x + e.w - 2; x++) addGlow(glow, e.y * W + x, heatColor(e.temp), hot);
-      // Knob and display.
-      rect(buf, e.x + 3, e.y + 4, 14, 7, [16, 18, 22]);
-      drawText(buf, W, H, e.x + 4, e.y + 5, e.on ? String(Math.round(e.setpoint)) : 'OFF', e.on ? [255, 120, 60] : [90, 96, 110]);
+      // Surface temperature readout.
+      rect(buf, e.x + 3, e.y + 4, 18, 7, [16, 18, 22]);
+      drawText(buf, W, H, e.x + 4, e.y + 5, `${Math.round(e.temp)}°`, e.temp > 40 ? [255, 120, 60] : [120, 126, 140]);
       rect(buf, e.x + e.w - 8, e.y + 5, 5, 5, e.on ? [220, 70, 40] : [90, 96, 110]);
       if (e.on) addGlow(glow, (e.y + 7) * W + e.x + e.w - 6, [255, 80, 40], 0.8);
     } else if (e.kind === 'bath') {
@@ -260,15 +287,13 @@ export class Renderer {
       rect(buf, e.x + e.w, e.y, 3, 2, [150, 156, 168]);
       // Vacuum hose to the filter flask's side arm.
       for (let i = 0; i < 14; i++) rect(buf, e.x + e.w + 3 + Math.round(Math.sin(i / 3) * 1.5), base - 26 + i, 2, 1, [60, 64, 70]);
-      rect(buf, e.x + e.w + 6, base - 9, textWidth(e.on ? 'VAC' : 'VAC') + 4, 7, [16, 18, 22]);
-      drawText(buf, W, H, e.x + e.w + 8, base - 8, 'VAC', e.on ? [110, 255, 150] : [90, 96, 110]);
-      if (e.on) addGlow(glow, (base - 6) * W + e.x + e.w + 10, [40, 200, 90], 0.5);
+      if (e.on) addGlow(glow, (base - 4) * W + e.x + e.w + 4, [40, 200, 90], 0.3);
     } else if (e.kind === 'mp') {
       rect(buf, e.x, e.y, e.w, 2, [180, 184, 192]);
       rect(buf, e.x + 1, e.y + 2, e.w - 2, e.h - 2, [62, 52, 58]);
       const txt = e.display ?? '---';
-      rect(buf, e.x + 3, e.y + 5, e.w - 6, 7, [12, 30, 20]);
-      drawText(buf, W, H, e.x + 4, e.y + 6, txt.slice(0, Math.floor((e.w - 8) / 4)), [110, 255, 150]);
+      rect(buf, e.x + 3, e.y + 3, e.w - 6, 7, [12, 30, 20]);
+      drawText(buf, W, H, e.x + 4, e.y + 4, txt.slice(0, Math.floor((e.w - 8) / 4)), [110, 255, 150]);
       if (e.temp > 40) {
         const hot = Math.min(1, (e.temp - 40) / 120);
         for (let x = e.x + 2; x < e.x + e.w - 2; x++) addGlow(glow, e.y * W + x, heatColor(e.temp), hot * 0.6);
@@ -308,10 +333,10 @@ export class Renderer {
       rect(buf, e.x, e.y, 2, e.h, [96, 104, 118]);
       rect(buf, e.x + e.w - 2, e.y, 2, e.h, [96, 104, 118]);
       rect(buf, e.x, e.y + e.h - 2, e.w, 2, [96, 104, 118]);
-      // Display panel below the basin rim.
-      const label = e.fixedTemp ? 'ICE' : e.on ? `${Math.round(e.temp)}°` : 'OFF';
-      rect(buf, e.x + 3, e.y + e.h, textWidth(label) + 4, 7, [16, 18, 22]);
-      drawText(buf, W, H, e.x + 5, e.y + e.h + 1, label, e.fixedTemp ? [150, 200, 240] : e.on ? [255, 160, 70] : [90, 96, 110]);
+      // Thermometer readout clipped to the rim; the controls are on the bench front.
+      const label = `${Math.round(e.temp)}°`;
+      if (!e.fixedTemp) rect(buf, e.x + e.w - textWidth(label) - 6, e.y - 8, textWidth(label) + 4, 7, [16, 18, 22]);
+      if (!e.fixedTemp) drawText(buf, W, H, e.x + e.w - textWidth(label) - 4, e.y - 7, label, e.fixedTemp ? [150, 200, 240] : e.temp > 30 ? [255, 160, 70] : [150, 160, 176]);
     } else if (e.kind === 'balance') {
       const on = world.containers.find((c) => c.restOn === e.id && !c.held);
       const grams = on ? on.grossMass() - (e.tare ?? 0) : -(e.tare ?? 0);

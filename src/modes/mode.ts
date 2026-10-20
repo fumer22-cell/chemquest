@@ -4,13 +4,13 @@ import type { Tool } from '../sim/tools';
 import type { World } from '../sim/world';
 import type { Sfx } from '../ui/audio';
 import type { Input } from '../ui/input';
-import type { StructurePanel } from '../ui/structure';
+import type { MoleculeBar } from '../ui/structure';
 
 export interface AppContext {
   world: World;
   renderer: Renderer;
   input: Input;
-  structure: StructurePanel;
+  molecules: MoleculeBar;
   panel: HTMLElement;
   sfx: Sfx;
   /** Sim ticks per frame (fast-forward). */
@@ -32,6 +32,10 @@ export interface Mode {
   refresh?(ctx: AppContext): void;
   /** Tooltip text for a hovered container. */
   tooltip(c: Container, ctx: AppContext): string;
+  /** Molecules the structure bar follows (the reaction's key species). */
+  focus?: string[];
+  /** The vessel the structure bar shows before anything has been poured. */
+  defaultWorking?(ctx: AppContext): Container | null;
   /** Tooltip for a hovered tool. */
   toolTooltip?(t: Tool, ctx: AppContext): string;
   /** A tool was used (pipette squeeze). */

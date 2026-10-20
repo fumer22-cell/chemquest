@@ -66,6 +66,7 @@ export const STOCKS = [
 export const REACTIONS: ReactionDef[] = [
   {
     id: 'acetylation',
+    effect: 'makes aspirin from salicylic acid',
     name: 'Acetylation of salicylic acid',
     reactants: [{ id: 'salicylic_acid', coef: 1 }, { id: 'acetic_anhydride', coef: 1 }],
     products: [{ id: 'aspirin', coef: 1 }, { id: 'acetic_acid', coef: 1 }],
@@ -80,6 +81,7 @@ export const REACTIONS: ReactionDef[] = [
   },
   {
     id: 'assa',
+    effect: 'side reaction when too hot: aspirin + salicylic acid → ester by-product',
     name: 'Overheating side reaction: aspirin + salicylic acid → acetylsalicylsalicylic acid',
     reactants: [{ id: 'aspirin', coef: 1 }, { id: 'salicylic_acid', coef: 1 }],
     products: [{ id: 'assa', coef: 1 }, { id: 'water', coef: 1 }],
@@ -93,6 +95,7 @@ export const REACTIONS: ReactionDef[] = [
   },
   {
     id: 'decomposition',
+    effect: 'decomposes aspirin to brown products (overheated)',
     name: 'Decomposition of aspirin when strongly overheated (brown products)',
     reactants: [{ id: 'aspirin', coef: 1 }],
     products: [{ id: 'tar', coef: 1 }, { id: 'water', coef: 1 }],
@@ -105,6 +108,7 @@ export const REACTIONS: ReactionDef[] = [
   },
   {
     id: 'anhydride_hydrolysis',
+    effect: 'destroys leftover acetic anhydride (hot and vigorous)',
     name: 'Hydrolysis of excess acetic anhydride (the quench)',
     reactants: [{ id: 'acetic_anhydride', coef: 1 }, { id: 'water', coef: 1 }],
     products: [{ id: 'acetic_acid', coef: 2 }],
@@ -119,6 +123,7 @@ export const REACTIONS: ReactionDef[] = [
   },
   {
     id: 'aspirin_hydrolysis',
+    effect: 'slowly breaks aspirin back down to salicylic acid in hot water',
     name: 'Hydrolysis of aspirin in hot water',
     reactants: [{ id: 'aspirin', coef: 1 }, { id: 'water', coef: 1 }],
     products: [{ id: 'salicylic_acid', coef: 1 }, { id: 'acetic_acid', coef: 1 }],
@@ -131,6 +136,7 @@ export const REACTIONS: ReactionDef[] = [
   },
   {
     id: 'ferric_test',
+    effect: 'turns violet if salicylic acid is present',
     name: 'Ferric chloride test: Fe³⁺ + phenol → violet complex',
     reactants: [{ id: 'ferric_chloride', coef: 1 }, { id: 'salicylic_acid', coef: 1 }],
     products: [{ id: 'iron_salicylate', coef: 1 }, { id: 'hcl', coef: 2 }],
@@ -146,22 +152,56 @@ export const REACTIONS: ReactionDef[] = [
 export interface StepDef {
   id: string;
   title: string;
+  /** What to do. */
   detail: string;
+  /** What this step achieves and why it is done this way. */
+  why: string;
+  /** Everything added in this step, and the reason it is there. */
+  adds?: { what: string; why: string }[];
+  /** The reaction this step runs (or must avoid), shown as an equation. */
+  reaction?: { equation: string; note: string };
+  /** What you should see. */
+  watch?: string;
   safety: string[];
 }
+
+/** The first page of the lab manual. */
+export const MANUAL_INTRO = {
+  title: 'Experiment 1: Synthesis of aspirin',
+  equation: 'C₇H₆O₃ + C₄H₆O₃ —H₃PO₄→ C₉H₈O₄ + C₂H₄O₂',
+  equationNames: 'salicylic acid + acetic anhydride → acetylsalicylic acid (aspirin) + acetic acid',
+  text: [
+    'Aspirin is made by acetylating salicylic acid: the phenol –OH group of salicylic acid is turned into an acetate ester using acetic anhydride, with a few drops of acid as a catalyst.',
+    'The plan: react (steps 1–5), destroy the excess anhydride (6), crystallise and collect the crude product (7–9), purify it by recrystallisation (10–11), then dry, weigh and test it (12–14).',
+    'The manual turns to each step as you reach it. You can deviate from it, and the chemistry will play out.',
+  ],
+  controls: [
+    'Drag glassware to move it. Right-drag, or hold it and use the wheel or Q/E, to tilt and pour. Rock it quickly to shake crystals loose.',
+    'Pipette: click with the tip in a liquid to fill, then click over a vessel for one drop (Space also squeezes while you hold it).',
+    'Spatula: click with the tip in crystals to scoop (Shift+click for a pinch), click again to tip them out. It also picks up spills.',
+    'Glass rod: drag it inside a flask to stir; rubbing the glass scratches and starts crystals forming.',
+    'The buttons on the equipment work: TARE on the balance, − / + / ON under the bath, VAC on the filter stand, RUN on the melting-point apparatus.',
+  ],
+};
 
 /** The written procedure shown in Instruction mode. */
 export const STEPS: StepDef[] = [
   {
     id: 'weigh_sa',
     title: 'Weigh 2.00 g of salicylic acid into the 125 mL Erlenmeyer flask',
-    detail: 'Put the flask on the balance and tare it. Tilt the salicylic acid jar gently over the flask until the balance reads 2.00 g.',
-    safety: ['Goggles and gloves on for the whole lab.', 'Salicylic acid irritates eyes and skin. Sweep up spills right away.'],
+    detail: 'Put the empty flask on the balance and press TARE on the balance. Tilt the salicylic acid jar gently over the flask until the balance reads 2.00 g.',
+    why: 'Salicylic acid is the starting material and the limiting reagent: your theoretical yield is set by how much you weigh out here. 2.00 g is 14.5 mmol, enough to make at most 2.61 g of aspirin.',
+    adds: [{ what: 'Salicylic acid, 2.00 g (14.5 mmol)', why: 'The molecule you are changing. Its phenol –OH group becomes an acetate ester.' }],
+    watch: 'Tare with the empty flask on the pan, or the reading includes the glass (72.8 g).',
+    safety: ['Goggles and gloves on for the whole lab.', 'Salicylic acid irritates eyes and skin. Pick up spills with the spatula.'],
   },
   {
     id: 'measure_ac2o',
     title: 'In the fume hood, measure 5.0 mL of acetic anhydride',
-    detail: 'Pour it into the 10 mL graduated cylinder and read the bottom of the meniscus.',
+    detail: 'Pour acetic anhydride into the 10 mL graduated cylinder (it stands in the hood) until it reads 5.0 mL. Hover over the cylinder to read it.',
+    why: 'Acetic anhydride supplies the acetyl group (CH₃CO–). 5.0 mL is 53 mmol, about 3.7 times the salicylic acid, so salicylic acid stays the limiting reagent and the reaction is pushed to completion. Because it is an excess, a graduated cylinder is accurate enough.',
+    adds: [{ what: 'Acetic anhydride, 5.0 mL (5.4 g, 53 mmol)', why: 'The acetylating agent. Being a liquid, it also acts as the solvent the salicylic acid dissolves in when warm.' }],
+    watch: 'A clear, colourless liquid with a sharp vinegar smell. If you can smell it, vapour is escaping: keep it in the hood.',
     safety: [
       'Acetic anhydride is corrosive and a lachrymator (it makes your eyes stream). Dispense it only inside the fume hood.',
       'It reacts with water. Keep the bottle closed when not pouring.',
@@ -170,81 +210,127 @@ export const STEPS: StepDef[] = [
   {
     id: 'add_ac2o',
     title: 'Add the acetic anhydride to the salicylic acid',
-    detail: 'Pour it in so it washes any crystals down from the walls of the flask.',
+    detail: 'Bring the flask into the fume hood and pour the anhydride in so it washes any crystals down from the walls.',
+    why: 'The two reagents only react when they are in contact in solution. Washing crystals off the glass makes sure all the salicylic acid you weighed takes part.',
+    watch: 'At room temperature most of the salicylic acid stays undissolved. That changes when you heat it.',
     safety: ['Pour slowly, keeping the flask in the hood.'],
   },
   {
     id: 'add_catalyst',
     title: 'Add 5 drops of 85 % phosphoric acid',
-    detail: 'Use a pipette: click the pipette in the acid bottle to fill it, then hold it over the flask and click once per drop.',
+    detail: 'Click a pipette with its tip in the phosphoric acid bottle to fill it, hold it over the flask and click once per drop.',
+    why: 'On its own the reaction is very slow. A strong acid protonates a carbonyl oxygen of the anhydride, making its carbonyl carbon far more electrophilic, so the weakly nucleophilic phenol oxygen can attack it. A catalyst is not used up, so a few drops are enough.',
+    adds: [
+      {
+        what: '85 % phosphoric acid, 5 drops (≈0.25 mL)',
+        why: 'Acid catalyst. Phosphoric acid is often chosen over sulfuric acid because it is less oxidising and causes fewer side reactions and less charring.',
+      },
+    ],
+    reaction: {
+      equation: 'C₇H₆O₃ + C₄H₆O₃ —H₃PO₄→ C₉H₈O₄ + C₂H₄O₂',
+      note: 'This is the reaction that makes your product: the phenol –OH of salicylic acid becomes an ester (–OCOCH₃), and acetic acid is the by-product.',
+    },
+    watch: 'Nothing visible yet. The reaction needs heat.',
     safety: ['Concentrated phosphoric acid is corrosive. Wear gloves and add it one drop at a time.'],
   },
   {
     id: 'heat',
     title: 'Swirl, then heat in the 75 °C water bath for 15 minutes',
-    detail: 'Set the bath to 75 °C and stand the flask in it. The solid dissolves as it warms; keep heating 15 minutes in total. Fast-forward helps.',
+    detail: 'Use the − / + and ON buttons under the bath to set 75 °C and switch it on. Stand the flask in the bath, swirl it, and leave it there for 15 minutes. Fast-forward helps.',
+    why: 'Heat speeds the reaction up (about twice as fast for every 10 °C) and dissolves the salicylic acid so it can react. 70–80 °C finishes the job in 15 minutes while staying below about 90 °C, where aspirin starts reacting with leftover salicylic acid and decomposing.',
+    reaction: {
+      equation: 'C₇H₆O₃ + C₄H₆O₃ —H₃PO₄, 75 °C→ C₉H₈O₄ + C₂H₄O₂',
+      note: 'Watch the structure bar at the top: salicylic acid is converted into aspirin as the reaction runs.',
+    },
+    watch: 'The solid dissolves within a couple of minutes and the solution stays clear and colourless. A yellow or brown tint means it got too hot.',
     safety: ['The bath water is hot enough to scald. Handle the flask by its neck.', 'Keep the temperature below 85 °C.'],
   },
   {
     id: 'quench',
     title: 'While the flask is still warm, add 20 drops (1 mL) of water',
-    detail: 'This destroys the leftover acetic anhydride. Expect it to fizz and steam.',
-    safety: ['The reaction with water is vigorous and gives off hot acetic acid vapour. Add the water drop by drop, in the hood, with the flask pointing away from you.'],
+    detail: 'Take the flask out of the bath. While it is still warm, add 20 drops of water from a pipette, one drop at a time.',
+    why: 'About 40 mmol of acetic anhydride is left over, and it would contaminate the product. Water hydrolyses it to acetic acid, which is soluble and washes away later. Warm, this takes a minute or two; drop by drop keeps the heat it gives off under control.',
+    adds: [{ what: 'Water, 1 mL', why: 'A reagent here, not a solvent: it destroys the excess anhydride.' }],
+    reaction: {
+      equation: 'C₄H₆O₃ + H₂O → 2 C₂H₄O₂   (ΔH ≈ −58 kJ/mol)',
+      note: 'Strongly exothermic. The flask warms up and gives off acetic acid vapour.',
+    },
+    watch: 'Hissing, steam and a strong vinegar smell.',
+    safety: ['This reaction is vigorous and gives off hot acetic acid vapour. Add the water drop by drop, in the hood, with the flask pointing away from you.'],
   },
   {
     id: 'crystallise',
     title: 'Add 20 mL of cold water, cool to room temperature, then ice-bath 10 minutes',
-    detail: 'Let it cool on the bench first, then put it in the ice bath. If no crystals appear, scratch the inside of the flask with the glass rod.',
+    detail: 'Pour in about 20 mL of cold water. Let the flask cool on the bench, then put it in the ice bath for 10 minutes. If no crystals appear, scratch the inside of the flask with the glass rod.',
+    why: 'Aspirin dissolves well in the warm acetic acid mixture but only about 0.3 g per 100 mL in cold water. Adding water and cooling makes the solution supersaturated, so aspirin crystallises while acetic acid, phosphoric acid and most leftover salicylic acid stay dissolved. Scratching the glass creates rough spots where the first crystals can form.',
+    adds: [{ what: 'Cold water, 20 mL', why: 'An anti-solvent: it lowers aspirin’s solubility so it crystallises. It also finishes hydrolysing any remaining anhydride.' }],
+    watch: 'White crystals appear and the mixture thickens to a slurry.',
     safety: ['Scratch gently. Cracked glass can break in the ice bath.'],
   },
   {
     id: 'filter_crude',
     title: 'Collect the crystals by vacuum filtration',
-    detail: 'Seat the Büchner funnel on the filter stand over the filter flask, turn the vacuum on, and pour the slurry in. Rinse the flask with a little ice-cold water.',
-    safety: [
-      'Use only the thick-walled filter flask under vacuum. Thin glassware can implode.',
-      'Turn the vacuum off before you take the funnel off.',
-    ],
+    detail: 'Check the Büchner funnel sits on the filter stand over the filter flask and press VAC on the stand. Pour the slurry in, rocking the flask to shake the crystals out. Rinse the flask with a little ice-cold water and pour that in too.',
+    why: 'Vacuum filtration separates the crystals from the mother liquor (the liquid holding the impurities) quickly, and leaves them much drier than letting liquid drip through on its own.',
+    watch: 'Clear filtrate collects in the flask below while a white cake builds up on the paper.',
+    safety: ['Use only the thick-walled filter flask under vacuum. Thin glassware can implode.', 'Turn the vacuum off before you take the funnel off.'],
   },
   {
     id: 'wash',
     title: 'Wash the crystals with two 5 mL portions of ice-cold water',
-    detail: 'Pour each portion over the crystals and let the vacuum pull it through. Cold water removes acid without dissolving much aspirin.',
+    detail: 'With the vacuum on, pour about 5 mL of ice-cold water over the crystals and let it pull through. Repeat once.',
+    why: 'The film of liquid clinging to the crystals still holds phosphoric acid, acetic acid and dissolved salicylic acid. Rinsing replaces it with clean water. Ice-cold water in small portions dissolves as little aspirin as possible.',
+    adds: [{ what: 'Ice-cold water, 2 × 5 mL', why: 'Wash solvent: removes the acidic mother liquor from the crystal surfaces.' }],
     safety: ['Ice-cold water only. Warm water dissolves your product.'],
   },
   {
     id: 'recrystallise',
     title: 'Recrystallise from ethanol and water',
     detail:
-      'Scrape the crude crystals into the 50 mL flask with the spatula (click to scoop, click again to tip out). Add about 4 mL of ethanol and warm it in the bath until they dissolve. Keeping the flask in the bath, add about 13 mL of water; if it turns cloudy, keep warming until it clears. Then let it cool slowly on the bench before the ice bath.',
-    safety: [
-      'Ethanol is flammable. Warm it only in the water bath, never over a flame.',
-      'Do not boil aspirin in water. It hydrolyses back to salicylic acid.',
+      'Scrape the crude crystals into the 50 mL flask with the spatula. Add about 4 mL of ethanol and warm the flask in the bath until they dissolve. Keeping it in the bath, add about 13 mL of water; if it turns cloudy, keep warming until it clears. Then let it cool slowly on the bench before the ice bath.',
+    why: 'Recrystallisation purifies a solid. Aspirin is very soluble in hot ethanol but much less soluble in cold ethanol–water. Dissolving the crude product hot and cooling it slowly lets pure aspirin crystals grow, while the small amounts of salicylic acid and side products stay in solution. Cooling too fast traps impurities inside the crystals.',
+    adds: [
+      { what: 'Ethanol, ≈4 mL', why: 'The “good” solvent: it dissolves aspirin when hot.' },
+      { what: 'Water, ≈13 mL', why: 'The “poor” solvent: it lowers aspirin’s solubility so it crystallises as the mixture cools, while impurities stay dissolved.' },
     ],
+    reaction: {
+      equation: 'C₉H₈O₄ + H₂O → C₇H₆O₃ + C₂H₄O₂',
+      note: 'The reaction to avoid. Hot water slowly hydrolyses aspirin back to salicylic acid, so warm the solution only as long as needed and never boil it.',
+    },
+    watch: 'A clear solution while hot; fine needles of aspirin growing as it cools.',
+    safety: ['Ethanol is flammable. Warm it only in the water bath, never over a flame.'],
   },
   {
     id: 'filter_pure',
     title: 'Collect the recrystallised product by vacuum filtration',
-    detail: 'Empty the filter flask first, then filter as before and rinse with a little ice-cold water.',
+    detail: 'Tip the filter flask’s contents into the waste bin first. Then vacuum-filter the recrystallised product as before and rinse it with a little ice-cold water.',
+    why: 'The mother liquor now holds the impurities that recrystallisation left behind, so it has to be separated from the purified crystals.',
+    adds: [{ what: 'Ice-cold water, a few mL', why: 'A final rinse of the pure crystals.' }],
     safety: ['Same vacuum precautions as before.'],
   },
   {
     id: 'dry',
     title: 'Dry the crystals on a watch glass (about 20 minutes)',
-    detail: 'Tip or scrape the crystals onto the watch glass and leave them to air-dry. Fast-forward helps.',
+    detail: 'Leave the vacuum on for a few minutes to pull air through the crystals. Then scrape or tip them onto the watch glass and leave them to air-dry. Fast-forward helps.',
+    why: 'Water left in the crystals adds mass, which makes the yield look too high, and it lowers and broadens the melting point. Drying removes it.',
+    watch: 'The crystals change from clumped and glistening to a loose white powder.',
     safety: ['Label your product. Never taste anything made in the lab.'],
   },
   {
     id: 'weigh_product',
     title: 'Weigh your dry product',
-    detail: 'Tare the balance, then put the watch glass with the product on it. (The glass weighs 18.30 g.)',
+    detail: 'With the pan empty, press TARE on the balance, then put the watch glass with your product on it. Subtract the watch glass (18.30 g).',
+    why: 'Percent yield = mass of dry product ÷ theoretical yield (2.61 g for 2.00 g of salicylic acid) × 100. Losses come from incomplete reaction, aspirin that stays dissolved, and transfers.',
     safety: [],
   },
   {
     id: 'test_purity',
     title: 'Test purity: melting point and ferric chloride test',
     detail:
-      'Stand the watch glass on the melting-point apparatus and run it (pure aspirin melts at 135–136 °C). For the FeCl₃ test, put a pinch of crystals (Shift+click with the spatula) in a test tube with about 1 mL of water and add a drop of FeCl₃. Violet means salicylic acid is still present.',
+      'Stand the watch glass on the melting-point apparatus and press RUN. For the FeCl₃ test, put a pinch of crystals (Shift+click with the spatula) in a test tube with about 1 mL of water and add a drop of FeCl₃.',
+    why: 'A pure compound melts sharply at its literature value (aspirin: 135–136 °C); impurities lower the melting point and spread it over a range. Iron(III) forms a violet complex with phenols. Salicylic acid has a phenol –OH and aspirin does not, so the test reveals unreacted or hydrolysed starting material.',
+    adds: [{ what: '1 % FeCl₃ solution, 1 drop', why: 'Test reagent for phenols.' }],
+    reaction: { equation: 'FeCl₃ + C₇H₆O₃ → [Fe(C₇H₄O₃)]Cl + 2 HCl', note: 'Violet means salicylic acid is present; pale yellow means it is not.' },
     safety: ['The melting-point block gets hot.', 'FeCl₃ is corrosive and stains. Dispose of the test solution in the waste.'],
   },
 ];

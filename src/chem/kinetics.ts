@@ -16,6 +16,8 @@ export interface Term {
 export interface ReactionDef {
   id: string;
   name: string;
+  /** Short plain-language description of what it does (shown when you hold a reagent). */
+  effect?: string;
   reactants: Term[];
   products: Term[];
   /** kJ per mole of reaction (negative = releases heat). */

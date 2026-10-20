@@ -33,7 +33,21 @@ npm run build
 - **Spatula**: click with the tip in crystals to scoop 0.6 g (**Shift**+click for a
   pinch); click over another vessel to tip it out.
 - **Glass rod**: drag inside a flask to stir; rub the glass to scratch and start crystallisation.
+- **Equipment buttons** are on the equipment: TARE on the balance, − / + / ON on the
+  bench front under the bath and hot plate (Shift for 1 °C steps), VAC on the filter
+  stand, RUN on the melting-point apparatus.
+- The spatula and pipette also pick up spills from the bench.
 - Hover anything to read it. Use fast-forward while waiting.
+
+## Structure bar and lab manual
+
+- The top bar follows the molecule you are working on as it changes (salicylic acid →
+  aspirin, with live proportions), shows what is in your hand, and predicts what
+  adding it would do (e.g. "makes aspirin from salicylic acid", or a warning for
+  side reactions).
+- The side panel is a lab manual: one page per step with the procedure, **why** it is
+  done, what each added reagent is for, the reaction, what to watch for, and safety.
+  It turns to the current step on its own; nothing pauses the game.
 
 ## Architecture
 

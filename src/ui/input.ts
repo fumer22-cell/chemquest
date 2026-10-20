@@ -24,7 +24,7 @@ export class Input {
   /** Fires on the first user gesture (for audio unlock). */
   onGesture: () => void = () => {};
   /** Fires when a container is clicked without dragging. */
-  onClick: (c: Container | null, x: number, y: number) => void = () => {};
+  onClick: (c: Container | null, x: number, y: number, fine: boolean) => void = () => {};
   /** Fires to use a tool (pipette squeeze/fill). */
   onToolAct: (t: Tool, fine: boolean) => void = () => {};
   private downAt: { x: number; y: number } | null = null;
@@ -130,7 +130,7 @@ export class Input {
     }
     if (e.button === 0) {
       const moved = this.downAt ? Math.hypot(this.mx - this.downAt.x, this.my - this.downAt.y) : 99;
-      if (moved < 1.5) this.onClick(this.held, this.mx, this.my);
+      if (moved < 1.5) this.onClick(this.held, this.mx, this.my, e.shiftKey);
       this.downAt = null;
       if (this.held) {
         this.held.held = false;

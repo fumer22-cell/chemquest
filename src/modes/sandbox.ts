@@ -42,70 +42,38 @@ export class SandboxMode implements Mode {
     w.add(new Container(GLASSWARE.beaker50, 190, 100));
 
     w.tools = [new Tool('pipette', 100, 20), new Tool('rod', 106, 14), new Tool('spatula', 112, 22)];
-    ctx.structure.show('water', 'Sandbox');
     this.buildPanel(ctx);
   }
 
   private buildPanel(ctx: AppContext): void {
     const p = ctx.panel;
     p.innerHTML = `
-      <h2>Sandbox</h2>
-      <p class="hint">
-        <b>Drag</b> glassware to move it. <b>Right-drag</b> (or hold it and use the wheel or <kbd>Q</kbd>/<kbd>E</kbd>) to tilt and pour.
-        Let go and it rights itself. Hover anything to read it.
-      </p>
-      <div class="group">
-        <h3>Hot plate</h3>
-        <div class="row"><label for="hp-set">Setpoint</label><output id="hp-out"></output></div>
-        <input id="hp-set" type="range" min="30" max="350" step="5" />
-        <div class="row"><button id="hp-on">Turn on</button><span class="stat" id="hp-temp"></span></div>
+      <div class="manual">
+        <div class="manual-head"><span class="kicker">Sandbox</span></div>
+        <article class="page">
+          <h3>Free bench</h3>
+          <p>Pour, heat, boil and chill anything on the shelf. Hover glassware to see exactly what is in it.</p>
+          <section class="sec"><h4>Controls</h4><ul>
+            <li>Drag glassware to move it. Right-drag, or hold it and use the wheel or Q/E, to tilt and pour.</li>
+            <li>The hot plate and water bath have − / + / ON buttons on the bench front; the balance has TARE.</li>
+            <li>Pipette: click in a liquid to fill, click again for a drop. Spatula: click in crystals to scoop, again to tip out. Both pick up spills.</li>
+          </ul></section>
+        </article>
       </div>
-      <div class="group">
-        <h3>Water bath</h3>
-        <div class="row"><label for="bath-set">Setpoint</label><output id="bath-out"></output></div>
-        <input id="bath-set" type="range" min="25" max="95" step="1" />
-        <div class="row"><button id="bath-on">Turn on</button><span class="stat" id="bath-temp"></span></div>
-      </div>
-      <div class="group">
-        <h3>Balance</h3>
-        <div class="row"><button id="tare">Tare</button><span class="hint">zeroes the reading with what is on it</span></div>
-      </div>
-      <div class="group">
-        <h3>Add glassware</h3>
-        <div class="row" id="spawn"></div>
-      </div>
-      <div class="group">
-        <h3>Time</h3>
-        <div class="row" id="speed"></div>
-      </div>
+      <div class="group"><h3>Add glassware</h3><div class="row" id="spawn"></div></div>
+      <div class="group"><h3>Time</h3><div class="row" id="speed"></div></div>
       <div class="group">
         <h3>Bench</h3>
         <div class="row"><button id="clear">Clear spills</button><button id="reset">Reset sandbox</button><button id="mute">Sound on</button></div>
         <div class="stat" id="stats"></div>
       </div>`;
     const w = () => ctx.world;
-    const hp = () => w().equipmentById('hotplate')!;
-    const bath = () => w().equipmentById('bath')!;
     const $ = <T extends HTMLElement>(id: string) => p.querySelector(`#${id}`) as T;
-
-    const hpSet = $<HTMLInputElement>('hp-set');
-    hpSet.value = String(hp().setpoint);
-    hpSet.oninput = () => (hp().setpoint = +hpSet.value);
-    $('hp-on').onclick = () => (hp().on = !hp().on);
-    const bathSet = $<HTMLInputElement>('bath-set');
-    bathSet.value = String(bath().setpoint);
-    bathSet.oninput = () => (bath().setpoint = +bathSet.value);
-    $('bath-on').onclick = () => (bath().on = !bath().on);
-    $('tare').onclick = () => {
-      const bal = w().equipmentById('balance')!;
-      const on = w().containers.find((c) => c.restOn === 'balance');
-      bal.tare = on ? on.grossMass() : 0;
-    };
     const spawn = $('spawn');
     for (const id of ['beaker50', 'beaker100', 'erlenmeyer50', 'erlenmeyer125', 'cylinder10', 'cylinder25', 'testTube', 'watchGlass']) {
       const b = document.createElement('button');
       b.textContent = GLASSWARE[id].name.replace(' graduated', '');
-      b.onclick = () => w().add(new Container(GLASSWARE[id], 150 + Math.random() * 40, 20));
+      b.onclick = () => w().add(new Container(GLASSWARE[id], 150 + Math.random() * 40, 60));
       spawn.append(b);
     }
     const speed = $('speed');
@@ -128,23 +96,11 @@ export class SandboxMode implements Mode {
 
   refresh(ctx: AppContext): void {
     const p = ctx.panel;
-    const hp = ctx.world.equipmentById('hotplate')!;
-    const bath = ctx.world.equipmentById('bath')!;
-    const set = (id: string, t: string) => {
-      const el = p.querySelector(`#${id}`);
-      if (el && el.textContent !== t) el.textContent = t;
-    };
-    set('hp-out', `${hp.setpoint} °C`);
-    set('hp-on', hp.on ? 'Turn off' : 'Turn on');
-    p.querySelector('#hp-on')?.classList.toggle('on', hp.on);
-    set('hp-temp', `surface ${Math.round(hp.temp)} °C`);
-    set('bath-out', `${bath.setpoint} °C`);
-    set('bath-on', bath.on ? 'Turn off' : 'Turn on');
-    p.querySelector('#bath-on')?.classList.toggle('on', bath.on);
-    set('bath-temp', `water ${bath.temp.toFixed(1)} °C`);
     p.querySelectorAll<HTMLButtonElement>('#speed button').forEach((b) => b.classList.toggle('on', +b.dataset.speed! === ctx.speed));
     const l = ctx.world.losses;
-    set('stats', `Spilled: ${l.spilledML.toFixed(1)} mL · Lost as vapour: ${l.vapourG.toFixed(2)} g`);
+    const t = `Spilled: ${l.spilledML.toFixed(1)} mL · Lost as vapour: ${l.vapourG.toFixed(2)} g`;
+    const el = p.querySelector('#stats');
+    if (el && el.textContent !== t) el.textContent = t;
   }
 
   toolTooltip(t: Tool): string {

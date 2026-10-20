@@ -68,3 +68,32 @@ describe('pipette', () => {
     expect(tt.liquid.grams('water')).toBeCloseTo(0.25, 3);
   });
 });
+
+describe('cleaning up spills', () => {
+  it('the spatula scrapes spilled crystals off the bench', () => {
+    const w = new World();
+    // Spill 0.3 g of crystals onto the bench as loose grains.
+    for (let n = 0; n < 12; n++) {
+      const grain = newLot('solid');
+      grain.addGrams('salicylic_acid', 0.025);
+      w.grid.put((w.benchY - 1) * 320 + 100 + n, 3, grain.id, 22);
+    }
+    const sp = new Tool('spatula', 0, 0);
+    aim(sp, 105, w.benchY - 2);
+    expect(sp.act(w)).toBe('fill');
+    expect(sp.lot!.grams('salicylic_acid')).toBeGreaterThan(0.2);
+  });
+
+  it('the pipette sucks up a spilled puddle', () => {
+    const w = new World();
+    for (let n = 0; n < 10; n++) {
+      const drop = newLot('liquid');
+      drop.addGrams('water', 0.05);
+      w.grid.put((w.benchY - 1) * 320 + 60 + n, 4, drop.id, 22);
+    }
+    const p = new Tool('pipette', 0, 0);
+    aim(p, 63, w.benchY - 2);
+    expect(p.act(w)).toBe('fill');
+    expect(p.volumeML()).toBeGreaterThan(0.25);
+  });
+});

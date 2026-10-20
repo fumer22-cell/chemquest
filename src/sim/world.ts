@@ -62,6 +62,10 @@ export class World {
   /** Called whenever material lands in a container (before it merges). */
   onDeliver: (c: Container, parcel: Lot) => void = () => {};
   tools: Tool[] = [];
+  /** A button on a piece of equipment that needs the level's help (e.g. melting point RUN). */
+  onAction: (id: string, e: Equipment) => void = () => {};
+  /** The vessel that most recently received material (what you are working on). */
+  lastFilled: Container | null = null;
 
   constructor() {
     // Bench top is a static wall row.
@@ -287,6 +291,7 @@ export class World {
       return;
     }
     this.onDeliver(c, parcel);
+    if (!c.reservoir) this.lastFilled = c;
     const dst = k === K.Liquid ? c.liquid : c.solid;
     dst.mergeFrom(parcel);
     freeLot(parcel);
@@ -316,6 +321,35 @@ export class World {
     if (o === -2 || this.grid.kind[j] !== K.Empty) return false;
     this.grid.put(j, kind, parcel.id, tC);
     return true;
+  }
+
+  /**
+   * Pick up spilled material near a world point (spatula: powder; pipette:
+   * liquid). Takes whole pixels until `max` (g for powder, mL for liquid).
+   * Returns how much was collected.
+   */
+  gather(wx: number, wy: number, kind: K, max: number, into: Lot): number {
+    let got = 0;
+    const cx = Math.floor(wx);
+    const cy = Math.floor(wy);
+    const cells: number[] = [];
+    for (let dy = -2; dy <= 5; dy++) {
+      for (let dx = -4; dx <= 4; dx++) {
+        const x = cx + dx;
+        const y = cy + dy;
+        if (x < 0 || y < 0 || x >= WORLD_W || y >= WORLD_H) continue;
+        if (this.grid.kind[y * WORLD_W + x] === kind) cells.push(y * WORLD_W + x);
+      }
+    }
+    cells.sort((a, b) => Math.hypot((a % WORLD_W) - cx, Math.floor(a / WORLD_W) - cy) - Math.hypot((b % WORLD_W) - cx, Math.floor(b / WORLD_W) - cy));
+    for (const j of cells) {
+      if (got >= max) break;
+      const lot = getLot(this.grid.clear(j));
+      got += kind === K.Powder ? lot.totalGrams() : lot.volumeML();
+      into.mergeFrom(lot);
+      freeLot(lot);
+    }
+    return got;
   }
 
   /** World particle i falls into container k at world cell j. */
@@ -385,6 +419,7 @@ export class World {
     this.clearSpills();
     for (const c of this.containers) c.dispose();
     this.containers = [];
+    this.lastFilled = null;
     for (const t of this.tools) if (t.lot) freeLot(t.lot);
     this.tools = [];
   }

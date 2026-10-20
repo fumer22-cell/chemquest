@@ -74,6 +74,10 @@ export class Tool {
         return 'fill';
       }
     }
+    if (!c && this.volumeML() < this.capacityML - 0.01) {
+      // Suck up a spill from the bench.
+      if (world.gather(tx, ty, K.Liquid, this.capacityML - this.volumeML(), this.lot) > 0) return 'fill';
+    }
     if (this.volumeML() <= 1e-6) return 'empty';
     const drop = newLot('liquid');
     this.lot.moveFraction(Math.min(1, VOL_PER_PX / this.volumeML()), drop);
@@ -91,12 +95,17 @@ export class Tool {
     const [tx, ty] = this.tip();
     if (lot.isEmpty()) {
       const c = world.containerAt(tx, ty);
-      if (!c || c.solid.totalGrams() <= 0) return 'empty';
+      if (!c || c.solid.totalGrams() <= 0) {
+        // Scrape up spilled crystals from the bench.
+        return world.gather(tx, ty, K.Powder, fine ? 0.02 : this.scoopG, lot) > 0 ? 'fill' : 'empty';
+      }
       const li = c.cellAt(tx, ty);
       const { kind, w } = c.grid;
       let near = false;
-      for (let dy = -2; dy <= 3 && !near; dy++) {
-        for (let dx = -2; dx <= 2 && !near; dx++) {
+      const lx = li % w;
+      for (let dy = -3; dy <= 4 && !near; dy++) {
+        for (let dx = -4; dx <= 4 && !near; dx++) {
+          if (lx + dx < 0 || lx + dx >= w) continue;
           const j = li + dy * w + dx;
           if (j >= 0 && j < kind.length && kind[j] === K.Powder) near = true;
         }

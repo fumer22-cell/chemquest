@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap"
     />
   </head>
   <body>
@@ -18,15 +18,24 @@
           <span class="logo">ChemQuest</span>
           <span class="sub">pixel organic lab</span>
         </div>
-        <section id="structure" aria-label="Key molecule">
-          <div class="mol">
-            <canvas class="a on" width="300" height="150"></canvas>
-            <canvas class="b" width="300" height="150"></canvas>
+        <section id="structure" aria-label="Molecules">
+          <div class="slot" id="slot-work">
+            <div class="mol"><canvas class="a"></canvas><canvas class="b"></canvas></div>
+            <div class="meta">
+              <div class="stage"></div>
+              <div class="name"></div>
+              <div class="formula"></div>
+              <div class="mix"></div>
+            </div>
           </div>
-          <div class="meta">
-            <div class="stage" id="mol-stage"></div>
-            <div class="name" id="mol-name"></div>
-            <div class="formula" id="mol-formula"></div>
+          <div class="effect" id="effect"></div>
+          <div class="slot hand idle" id="slot-hand">
+            <div class="mol"><canvas class="a"></canvas><canvas class="b"></canvas></div>
+            <div class="meta">
+              <div class="stage"></div>
+              <div class="name"></div>
+              <div class="formula"></div>
+            </div>
           </div>
         </section>
         <nav class="modes" id="modes"></nav>
